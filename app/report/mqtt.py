@@ -42,7 +42,7 @@ def publish_discovery():
     device = {
         "identifiers": [node],
         "name": "HA Sandbox Analyzer",
-        "model": "Sandbox v1.0",
+        "model": "Sandbox v0.4.0",
         "manufacturer": "JI Engineering",
     }
 
