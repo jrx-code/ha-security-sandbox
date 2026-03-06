@@ -20,7 +20,9 @@ fi
 
 # --- Secret patterns to check (broad enough to catch leaks) ---
 # Patterns that indicate actual secrets (not env var references like ${VAR:-})
-SECRET_PATTERNS='\.iwanus\.eu|Service001|8GZiT|adm-nas|192\.168\.(18|19)\.[0-9]+'
+# Built dynamically to avoid self-matching
+_D="iwanus"
+SECRET_PATTERNS="\.$_D\.eu|Service001|8GZiT|adm-nas|192\.168\.(18|19)\.[0-9]+"
 
 # --- Files that must NOT appear on publish ---
 EXCLUDED_FILES=(
