@@ -1,4 +1,4 @@
-"""HACS Sandbox Analyzer — FastAPI application."""
+"""HA Sandbox Analyzer — FastAPI application."""
 
 import asyncio
 import logging
@@ -23,7 +23,7 @@ _active_jobs: dict[str, dict] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("HACS Sandbox Analyzer starting")
+    log.info("HA Sandbox Analyzer starting")
     try:
         publish_discovery()
         publish_status("idle")
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     disconnect()
 
 
-app = FastAPI(title="HACS Sandbox Analyzer", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="HA Sandbox Analyzer", version="1.0.0", lifespan=lifespan)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "templates"))
 
 
