@@ -11,26 +11,15 @@ from app.models import Finding, ScanJob, Severity
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a security auditor specializing in Home Assistant custom components.
-Analyze the provided code for security issues, data exfiltration, obfuscated code,
-unnecessary network calls, and code quality problems.
-
-Respond ONLY with valid JSON in this exact format:
-{
-  "score": <float 0-10, where 10 is perfectly safe>,
-  "summary": "<2-3 sentence summary>",
-  "findings": [
-    {
-      "severity": "<critical|high|medium|low>",
-      "category": "<category>",
-      "description": "<what and why it's a problem>",
-      "file": "<filename if applicable>"
-    }
-  ]
-}"""
+SYSTEM_PROMPT = """You are a security auditor for Home Assistant custom components.
+Analyze the provided code and respond with a JSON security report.
+Output ONLY valid JSON with this schema:
+{"score": number 0-10, "summary": "string", "findings": [{"severity": "critical|high|medium|low", "category": "string", "description": "string", "file": "string"}]}
+Score 10 = perfectly safe. Score 0 = critically dangerous.
+Be specific about actual issues found in the code provided. Do not invent findings."""
 
 
-def _build_code_context(repo_path: Path, max_chars: int = 30000) -> str:
+def _build_code_context(repo_path: Path, max_chars: int = 15000) -> str:
     """Build a code context string from repo files, staying within token limits."""
     parts = []
     total = 0
@@ -89,30 +78,68 @@ Code:
 {code_context}"""
 
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            # Step 1: Get analysis in natural language
+            resp1 = await client.post(
+                f"{settings.ollama_url}/api/chat",
+                json={
+                    "model": settings.ollama_model,
+                    "messages": [
+                        {"role": "user", "content": user_prompt + "\n\nList security issues found."},
+                    ],
+                    "stream": False,
+                    "options": {"temperature": 0.1, "num_predict": 1500},
+                },
+            )
+            resp1.raise_for_status()
+            analysis = resp1.json().get("message", {}).get("content", "")
+            log.info("Step 1 analysis: %d chars", len(analysis))
+
+            # Step 2: Convert to structured JSON using format:json
+            json_schema_prompt = f"""Convert this security analysis into a JSON object with exactly these fields:
+- score: a number from 0 to 10 (10=safe, 0=dangerous)
+- summary: a 1-2 sentence summary
+- findings: array of objects with severity (critical/high/medium/low), category, description, file
+
+Analysis to convert:
+{analysis[:3000]}
+
+Return ONLY the JSON object."""
+
+            resp2 = await client.post(
                 f"{settings.ollama_url}/api/generate",
                 json={
                     "model": settings.ollama_model,
-                    "system": SYSTEM_PROMPT,
-                    "prompt": user_prompt,
+                    "prompt": json_schema_prompt,
                     "stream": False,
-                    "options": {"temperature": 0.1, "num_predict": 2000},
+                    "format": "json",
+                    "options": {"temperature": 0.0, "num_predict": 1500},
                 },
             )
-            resp.raise_for_status()
-            result = resp.json()
-            response_text = result.get("response", "")
+            resp2.raise_for_status()
+            response_text = resp2.json().get("response", "")
 
         # Parse JSON from response
-        # Handle potential markdown wrapping
         text = response_text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-            text = text.rsplit("```", 1)[0]
+        # Clean trailing markdown
+        if "```" in text:
+            text = text[:text.index("```")]
+        # Find matching closing brace
+        depth = 0
+        end = len(text)
+        for i, ch in enumerate(text):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        text = text[:end]
 
+        log.debug("AI JSON (%d chars): %s", len(text), text[:500])
         data = json.loads(text)
-        job.ai_score = float(data.get("score", 5.0))
+        job.ai_score = min(10.0, max(0.0, float(data.get("score", 5.0))))
         job.ai_summary = data.get("summary", "")
 
         for f in data.get("findings", []):

@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings
 
 
@@ -12,14 +14,11 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_url: str = "http://ai.iwanus.eu:11434"
-    ollama_model: str = "qwen2.5-coder:32b"
+    ollama_model: str = "gemma3:12b"
 
     # Home Assistant (for installed HACS list)
-    ha_url: str = "http://192.168.19.120:8123"
+    ha_url: str = "https://ha.iwanus.eu:8123"
     ha_token: str = ""
-
-    # HACS default repo list
-    hacs_repo_url: str = "https://github.com/hacs/default/raw/master"
 
     # Paths
     repos_dir: str = "/data/repos"
@@ -32,4 +31,11 @@ class Settings(BaseSettings):
     model_config = {"env_prefix": "SANDBOX_", "env_file": ".env"}
 
 
-settings = Settings()
+# Fallback: read HA_TOKEN and HA_URL directly from env if SANDBOX_ prefixed are empty
+_settings = Settings()
+if not _settings.ha_token:
+    _settings.ha_token = os.environ.get("HA_TOKEN", "")
+if _settings.ha_url == "https://ha.iwanus.eu:8123":
+    _settings.ha_url = os.environ.get("HA_URL", _settings.ha_url)
+
+settings = _settings

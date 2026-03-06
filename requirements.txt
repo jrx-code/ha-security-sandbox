@@ -7,3 +7,4 @@ paho-mqtt==2.1.0
 httpx==0.28.1
 GitPython==3.1.44
 python-multipart==0.0.20
+websockets==14.2

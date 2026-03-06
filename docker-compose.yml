@@ -15,7 +15,12 @@ services:
       - SANDBOX_MQTT_PORT=8883
       - SANDBOX_MQTT_USER=${MQTT_USER:-_mqtt_client}
       - SANDBOX_MQTT_PASS=${MQTT_PASS:-Service001}
-      - SANDBOX_HA_URL=${HA_URL:-http://192.168.19.120:8123}
-      - SANDBOX_HA_TOKEN=${HA_TOKEN:-}
-      - SANDBOX_OLLAMA_URL=http://ai.iwanus.eu:11434
-      - SANDBOX_OLLAMA_MODEL=qwen2.5-coder:32b
+      - SANDBOX_OLLAMA_URL=http://ollama:11434
+      - SANDBOX_OLLAMA_MODEL=gemma3:12b
+    networks:
+      - default
+      - ollama_internal
+
+networks:
+  ollama_internal:
+    external: true
