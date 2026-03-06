@@ -1,8 +1,13 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
+docker-compose.override.yml
 data/repos/
 data/reports/
+data/settings.json
 sandbox-ha/config/
 .venv/
 *.egg-info/
+.pytest_cache/
