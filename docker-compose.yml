@@ -8,19 +8,11 @@ services:
     volumes:
       - ./data:/data
     env_file:
-      - /share/Container/_config/secrets-mqtt.env
-      - /share/Container/_config/secrets-ha.env
+      - .env
     environment:
-      - SANDBOX_MQTT_HOST=mqtt.iwanus.eu
-      - SANDBOX_MQTT_PORT=8883
-      - SANDBOX_MQTT_USER=${MQTT_USER:-_mqtt_client}
-      - SANDBOX_MQTT_PASS=${MQTT_PASS:-Service001}
-      - SANDBOX_OLLAMA_URL=http://ollama:11434
-      - SANDBOX_OLLAMA_MODEL=gemma3:12b
-    networks:
-      - default
-      - ollama_internal
-
-networks:
-  ollama_internal:
-    external: true
+      - SANDBOX_MQTT_HOST=${MQTT_HOST:-localhost}
+      - SANDBOX_MQTT_PORT=${MQTT_PORT:-8883}
+      - SANDBOX_MQTT_USER=${MQTT_USER:-}
+      - SANDBOX_MQTT_PASS=${MQTT_PASS:-}
+      - SANDBOX_OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - SANDBOX_OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}

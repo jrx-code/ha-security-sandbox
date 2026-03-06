@@ -5,19 +5,19 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # MQTT
-    mqtt_host: str = "mqtt.iwanus.eu"
+    mqtt_host: str = "localhost"
     mqtt_port: int = 8883
-    mqtt_user: str = "_mqtt_client"
-    mqtt_pass: str = "Service001"
+    mqtt_user: str = ""
+    mqtt_pass: str = ""
     mqtt_use_tls: bool = True
     mqtt_node_id: str = "ha_sandbox"
 
     # Ollama
-    ollama_url: str = "http://ai.iwanus.eu:11434"
+    ollama_url: str = "http://ollama:11434"
     ollama_model: str = "gemma3:12b"
 
     # Home Assistant (for installed HACS list)
-    ha_url: str = "https://ha.iwanus.eu:8123"
+    ha_url: str = "http://homeassistant:8123"
     ha_token: str = ""
 
     # Paths
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 _settings = Settings()
 if not _settings.ha_token:
     _settings.ha_token = os.environ.get("HA_TOKEN", "")
-if _settings.ha_url == "https://ha.iwanus.eu:8123":
+if _settings.ha_url == "http://homeassistant:8123":
     _settings.ha_url = os.environ.get("HA_URL", _settings.ha_url)
 
 settings = _settings
