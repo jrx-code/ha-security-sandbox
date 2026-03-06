@@ -35,7 +35,9 @@ async def lifespan(app: FastAPI):
     disconnect()
 
 
-app = FastAPI(title="HA Sandbox Analyzer", version="1.0.0", lifespan=lifespan)
+__version__ = "0.4.0"
+
+app = FastAPI(title="HA Sandbox Analyzer", version=__version__, lifespan=lifespan)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "templates"))
 
 
@@ -199,7 +201,7 @@ async def api_system_info():
     repo_size = sum(f.stat().st_size for f in repos_dir.rglob("*") if f.is_file()) if repos_dir.exists() else 0
     report_count = len(list(reports_dir.glob("*.json"))) if reports_dir.exists() else 0
     return JSONResponse(content={
-        "version": "1.0.0",
+        "version": __version__,
         "reports": report_count,
         "repos_cached": repo_count,
         "cache_size_mb": round(repo_size / 1024 / 1024, 1),
