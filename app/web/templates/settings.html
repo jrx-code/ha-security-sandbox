@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HA Sandbox — Settings</title>
+    <style>
+        :root {
+            --bg: #1a1a2e; --surface: #16213e; --primary: #0f3460;
+            --accent: #e94560; --text: #eee; --text-muted: #999;
+            --safe: #00c853; --caution: #ffc107; --danger: #ff1744;
+            --input-bg: #0d1b2a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: var(--accent); margin-bottom: 4px; font-size: 1.6em; }
+        .subtitle { color: var(--text-muted); margin-bottom: 20px; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .section { background: var(--surface); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--primary); }
+        .section h2 { font-size: 1.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        .section h2 .icon { font-size: 1.2em; }
+
+        .form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .form-row label { min-width: 130px; color: var(--text-muted); font-size: 0.9em; }
+        .form-row input, .form-row select {
+            flex: 1; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--primary);
+            border-radius: 6px; color: var(--text); font-size: 0.9em;
+        }
+        .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent); }
+        .form-row input[type="checkbox"] { flex: none; width: 18px; height: 18px; accent-color: var(--accent); }
+        .form-row .hint { font-size: 0.8em; color: var(--text-muted); margin-left: 142px; margin-top: -6px; margin-bottom: 8px; }
+        select { cursor: pointer; }
+
+        .radio-group { display: flex; gap: 16px; margin-bottom: 12px; }
+        .radio-group label { min-width: auto; cursor: pointer; display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border: 1px solid var(--primary); border-radius: 8px; transition: all 0.2s; }
+        .radio-group label.active { border-color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+        .radio-group input[type="radio"] { accent-color: var(--accent); }
+
+        .provider-section { display: none; padding: 12px; border: 1px solid var(--primary); border-radius: 8px; margin-top: 8px; background: rgba(0,0,0,0.15); }
+        .provider-section.active { display: block; }
+
+        button, .btn {
+            padding: 8px 16px; background: var(--accent); color: white; border: none;
+            border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.85; }
+        .btn-secondary { background: var(--primary); }
+        .btn-danger { background: var(--danger); }
+        .btn-sm { padding: 6px 12px; font-size: 0.85em; }
+
+        .test-result { display: inline-block; margin-left: 10px; font-size: 0.85em; padding: 2px 8px; border-radius: 4px; }
+        .test-ok { background: var(--safe); color: #000; }
+        .test-fail { background: var(--danger); color: #fff; }
+        .test-loading { color: var(--text-muted); }
+
+        .actions { display: flex; gap: 10px; margin-top: 20px; justify-content: space-between; }
+        .actions-left { display: flex; gap: 10px; }
+
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .info-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(15,52,96,0.5); }
+        .info-label { color: var(--text-muted); font-size: 0.9em; }
+        .info-value { font-weight: 600; font-size: 0.9em; }
+
+        .saved-toast { position: fixed; top: 20px; right: 20px; background: var(--safe); color: #000;
+            padding: 10px 20px; border-radius: 8px; font-weight: 600; display: none; z-index: 200; }
+        .saved-toast.show { display: block; animation: fadeInOut 2s; }
+        @keyframes fadeInOut { 0%{opacity:0} 10%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Settings</h1>
+    <p class="subtitle"><a href="/">Back to Scanner</a></p>
+
+    <!-- AI Provider -->
+    <div class="section">
+        <h2><span class="icon">&#129302;</span> AI Model Provider</h2>
+        <div class="radio-group">
+            <label id="lbl-ollama" class="{{ 'active' if cfg.ai_provider == 'ollama' else '' }}">
+                <input type="radio" name="ai_provider" value="ollama" {{ 'checked' if cfg.ai_provider == 'ollama' else '' }} onchange="switchProvider('ollama')"> Local Ollama
+            </label>
+            <label id="lbl-public" class="{{ 'active' if cfg.ai_provider == 'public' else '' }}">
+                <input type="radio" name="ai_provider" value="public" {{ 'checked' if cfg.ai_provider == 'public' else '' }} onchange="switchProvider('public')"> Public API
+            </label>
+        </div>
+
+        <div id="sec-ollama" class="provider-section {{ 'active' if cfg.ai_provider == 'ollama' else '' }}">
+            <div class="form-row">
+                <label>URL</label>
+                <input type="text" id="ollama_url" value="{{ cfg.ollama_url }}">
+                <button class="btn-sm btn-secondary" onclick="loadOllamaModels()">Refresh</button>
+            </div>
+            <div class="form-row">
+                <label>Model</label>
+                <select id="ollama_model">
+                    <option value="{{ cfg.ollama_model }}" selected>{{ cfg.ollama_model }}</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label></label>
+                <button class="btn-sm btn-secondary" onclick="testOllama()">Test Connection</button>
+                <span id="ollama-test" class="test-result"></span>
+            </div>
+        </div>
+
+        <div id="sec-public" class="provider-section {{ 'active' if cfg.ai_provider == 'public' else '' }}">
+            <div class="form-row">
+                <label>Provider</label>
+                <select id="public_provider" onchange="onProviderChange()">
+                    <option value="openrouter" {{ 'selected' if cfg.public_provider == 'openrouter' else '' }}>OpenRouter</option>
+                    <option value="openai" {{ 'selected' if cfg.public_provider == 'openai' else '' }}>OpenAI</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label>API Key</label>
+                <input type="password" id="public_api_key" value="{{ cfg.public_api_key }}" placeholder="sk-or-...">
+            </div>
+            <div class="form-row">
+                <label>Model</label>
+                <select id="public_model"></select>
+            </div>
+            <div class="form-row">
+                <label>URL</label>
+                <input type="text" id="public_url" value="{{ cfg.public_url }}">
+            </div>
+            <div class="form-row">
+                <label></label>
+                <button class="btn-sm btn-secondary" onclick="testPublic()">Test Connection</button>
+                <span id="public-test" class="test-result"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Home Assistant -->
+    <div class="section">
+        <h2><span class="icon">&#127968;</span> Home Assistant</h2>
+        <div class="form-row">
+            <label>URL</label>
+            <input type="text" id="ha_url" value="{{ cfg.ha_url }}">
+        </div>
+        <div class="form-row">
+            <label>Token</label>
+            <input type="password" id="ha_token" value="{{ cfg.ha_token }}" placeholder="Long-lived access token">
+        </div>
+        <div class="form-row">
+            <label></label>
+            <button class="btn-sm btn-secondary" onclick="testHA()">Test Connection</button>
+            <span id="ha-test" class="test-result"></span>
+        </div>
+    </div>
+
+    <!-- MQTT -->
+    <div class="section">
+        <h2><span class="icon">&#128225;</span> MQTT (HA Discovery)</h2>
+        <div class="form-row">
+            <label>Enabled</label>
+            <input type="checkbox" id="mqtt_enabled" {{ 'checked' if cfg.mqtt_enabled else '' }}>
+        </div>
+        <div class="form-row">
+            <label>Host</label>
+            <input type="text" id="mqtt_host" value="{{ cfg.mqtt_host }}" style="flex:2">
+            <label style="min-width:40px">Port</label>
+            <input type="number" id="mqtt_port" value="{{ cfg.mqtt_port }}" style="flex:0.7">
+        </div>
+        <div class="form-row">
+            <label>User</label>
+            <input type="text" id="mqtt_user" value="{{ cfg.mqtt_user }}">
+        </div>
+        <div class="form-row">
+            <label>Password</label>
+            <input type="password" id="mqtt_pass" value="{{ cfg.mqtt_pass }}">
+        </div>
+        <div class="form-row">
+            <label>TLS</label>
+            <input type="checkbox" id="mqtt_tls" {{ 'checked' if cfg.mqtt_tls else '' }}>
+        </div>
+        <div class="form-row">
+            <label></label>
+            <button class="btn-sm btn-secondary" onclick="testMQTT()">Test Connection</button>
+            <span id="mqtt-test" class="test-result"></span>
+        </div>
+    </div>
+
+    <!-- Scan Settings -->
+    <div class="section">
+        <h2><span class="icon">&#128269;</span> Scan Settings</h2>
+        <div class="form-row">
+            <label>Max code context</label>
+            <input type="number" id="max_code_context" value="{{ cfg.max_code_context }}">
+            <span style="color:var(--text-muted);font-size:0.85em">chars</span>
+        </div>
+        <div class="form-row">
+            <label>AI timeout</label>
+            <input type="number" id="ai_timeout" value="{{ cfg.ai_timeout }}">
+            <span style="color:var(--text-muted);font-size:0.85em">seconds</span>
+        </div>
+        <div class="form-row">
+            <label>Max file size</label>
+            <input type="number" id="max_file_size_kb" value="{{ cfg.max_file_size_kb }}">
+            <span style="color:var(--text-muted);font-size:0.85em">KB</span>
+        </div>
+    </div>
+
+    <!-- System -->
+    <div class="section">
+        <h2><span class="icon">&#9881;</span> System</h2>
+        <div class="info-grid" id="system-info">
+            <div class="info-item"><span class="info-label">Version</span><span class="info-value">...</span></div>
+        </div>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <button class="btn-sm btn-danger" onclick="clearCache()">Clear Cache</button>
+            <button class="btn-sm btn-danger" onclick="clearReports()">Clear Reports</button>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+        <div class="actions-left">
+            <button onclick="saveSettings()">Save Settings</button>
+            <a href="/" class="btn btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;">Cancel</a>
+        </div>
+    </div>
+</div>
+
+<div class="saved-toast" id="toast">Settings saved</div>
+
+<script>
+const PRESETS = {{ provider_presets | tojson }};
+
+function switchProvider(p) {
+    document.getElementById('sec-ollama').classList.toggle('active', p === 'ollama');
+    document.getElementById('sec-public').classList.toggle('active', p === 'public');
+    document.getElementById('lbl-ollama').classList.toggle('active', p === 'ollama');
+    document.getElementById('lbl-public').classList.toggle('active', p === 'public');
+}
+
+function onProviderChange() {
+    const prov = document.getElementById('public_provider').value;
+    const preset = PRESETS[prov];
+    if (preset) {
+        document.getElementById('public_url').value = preset.url;
+        const sel = document.getElementById('public_model');
+        sel.innerHTML = preset.models.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+}
+
+async function loadOllamaModels() {
+    const url = document.getElementById('ollama_url').value;
+    const sel = document.getElementById('ollama_model');
+    const current = sel.value;
+    try {
+        const resp = await fetch('/api/ollama/models?url=' + encodeURIComponent(url));
+        const data = await resp.json();
+        if (data.models.length > 0) {
+            sel.innerHTML = data.models.map(m =>
+                `<option value="${m}" ${m === current ? 'selected' : ''}>${m}</option>`
+            ).join('');
+        }
+    } catch (e) { console.error(e); }
+}
+
+function showTest(id, ok, msg) {
+    const el = document.getElementById(id);
+    el.className = 'test-result ' + (ok ? 'test-ok' : 'test-fail');
+    el.textContent = ok ? msg : msg;
+}
+
+async function testOllama() {
+    const el = document.getElementById('ollama-test');
+    el.className = 'test-result test-loading'; el.textContent = 'Testing...';
+    try {
+        const resp = await fetch('/api/test/ollama', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url: document.getElementById('ollama_url').value, model: document.getElementById('ollama_model').value})
+        });
+        const r = await resp.json();
+        showTest('ollama-test', r.ok, r.ok ? `OK (${r.models?.length || 0} models)` : r.error);
+    } catch (e) { showTest('ollama-test', false, e.message); }
+}
+
+async function testPublic() {
+    const el = document.getElementById('public-test');
+    el.className = 'test-result test-loading'; el.textContent = 'Testing...';
+    try {
+        const resp = await fetch('/api/test/public', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url: document.getElementById('public_url').value, api_key: document.getElementById('public_api_key').value, model: document.getElementById('public_model').value})
+        });
+        const r = await resp.json();
+        showTest('public-test', r.ok, r.ok ? 'OK' : r.error);
+    } catch (e) { showTest('public-test', false, e.message); }
+}
+
+async function testHA() {
+    const el = document.getElementById('ha-test');
+    el.className = 'test-result test-loading'; el.textContent = 'Testing...';
+    try {
+        const resp = await fetch('/api/test/ha', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url: document.getElementById('ha_url').value, token: document.getElementById('ha_token').value})
+        });
+        const r = await resp.json();
+        showTest('ha-test', r.ok, r.ok ? `OK, HACS: ${r.hacs_count} components` : r.error);
+    } catch (e) { showTest('ha-test', false, e.message); }
+}
+
+async function testMQTT() {
+    const el = document.getElementById('mqtt-test');
+    el.className = 'test-result test-loading'; el.textContent = 'Testing...';
+    try {
+        const resp = await fetch('/api/test/mqtt', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                host: document.getElementById('mqtt_host').value,
+                port: document.getElementById('mqtt_port').value,
+                user: document.getElementById('mqtt_user').value,
+                pass: document.getElementById('mqtt_pass').value,
+                tls: document.getElementById('mqtt_tls').checked,
+            })
+        });
+        const r = await resp.json();
+        showTest('mqtt-test', r.ok, r.ok ? 'Connected' : r.error);
+    } catch (e) { showTest('mqtt-test', false, e.message); }
+}
+
+function gatherSettings() {
+    return {
+        ai_provider: document.querySelector('input[name="ai_provider"]:checked').value,
+        ollama_url: document.getElementById('ollama_url').value,
+        ollama_model: document.getElementById('ollama_model').value,
+        public_provider: document.getElementById('public_provider').value,
+        public_api_key: document.getElementById('public_api_key').value,
+        public_model: document.getElementById('public_model').value,
+        public_url: document.getElementById('public_url').value,
+        ha_url: document.getElementById('ha_url').value,
+        ha_token: document.getElementById('ha_token').value,
+        mqtt_enabled: document.getElementById('mqtt_enabled').checked,
+        mqtt_host: document.getElementById('mqtt_host').value,
+        mqtt_port: parseInt(document.getElementById('mqtt_port').value),
+        mqtt_user: document.getElementById('mqtt_user').value,
+        mqtt_pass: document.getElementById('mqtt_pass').value,
+        mqtt_tls: document.getElementById('mqtt_tls').checked,
+        max_code_context: parseInt(document.getElementById('max_code_context').value),
+        ai_timeout: parseInt(document.getElementById('ai_timeout').value),
+        max_file_size_kb: parseInt(document.getElementById('max_file_size_kb').value),
+    };
+}
+
+async function saveSettings() {
+    const data = gatherSettings();
+    const resp = await fetch('/api/settings', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
+    });
+    if (resp.ok) {
+        const toast = document.getElementById('toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+}
+
+async function clearCache() {
+    if (!confirm('Clear all cached repositories?')) return;
+    await fetch('/api/cache/clear', {method:'POST'});
+    loadSystemInfo();
+}
+
+async function clearReports() {
+    if (!confirm('Delete all scan reports?')) return;
+    await fetch('/api/reports/clear', {method:'POST'});
+    loadSystemInfo();
+}
+
+async function loadSystemInfo() {
+    try {
+        const resp = await fetch('/api/system');
+        const d = await resp.json();
+        document.getElementById('system-info').innerHTML = `
+            <div class="info-item"><span class="info-label">Version</span><span class="info-value">${d.version}</span></div>
+            <div class="info-item"><span class="info-label">Reports</span><span class="info-value">${d.reports}</span></div>
+            <div class="info-item"><span class="info-label">Cached repos</span><span class="info-value">${d.repos_cached}</span></div>
+            <div class="info-item"><span class="info-label">Cache size</span><span class="info-value">${d.cache_size_mb} MB</span></div>
+        `;
+    } catch (e) { console.error(e); }
+}
+
+// Init
+onProviderChange();
+loadOllamaModels();
+loadSystemInfo();
+</script>
+</body>
+</html>
