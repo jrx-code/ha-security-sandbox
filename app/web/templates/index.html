@@ -137,7 +137,12 @@
         {% endif %}
 
         <div class="card">
-            <h3>Scan History</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="margin:0">Scan History</h3>
+                {% if reports %}
+                <button class="btn btn-sm" style="background:var(--danger)" onclick="clearResults()">Clear Results</button>
+                {% endif %}
+            </div>
             {% if reports %}
             <table>
                 <thead><tr><th>Component</th><th>Type</th><th>Score</th><th>Findings</th><th>Status</th><th></th></tr></thead>
@@ -228,6 +233,13 @@ async function showReport(id) {
     });
     document.getElementById('modal-body').innerHTML = html;
     document.getElementById('modal').classList.add('open');
+}
+
+async function clearResults() {
+    if (!confirm('Delete all scan reports and cached repos?')) return;
+    await fetch('/api/reports/clear', {method:'POST'});
+    await fetch('/api/cache/clear', {method:'POST'});
+    location.reload();
 }
 
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
