@@ -6,10 +6,10 @@
     <title>HA Sandbox — Settings</title>
     <style>
         :root {
-            --bg: #1a1a2e; --surface: #16213e; --primary: #0f3460;
-            --accent: #e94560; --text: #eee; --text-muted: #999;
-            --safe: #00c853; --caution: #ffc107; --danger: #ff1744;
-            --input-bg: #0d1b2a;
+            --bg: #2e3440; --surface: #3b4252; --primary: #4c566a;
+            --accent: #88c0d0; --text: #eceff4; --text-muted: #7b8a9e;
+            --safe: #a3be8c; --caution: #ebcb8b; --danger: #bf616a;
+            --input-bg: #2e3440;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -37,7 +37,7 @@
         .radio-group { display: flex; gap: 16px; margin-bottom: 12px; }
         .radio-group label { min-width: auto; cursor: pointer; display: flex; align-items: center; gap: 6px;
             padding: 8px 16px; border: 1px solid var(--primary); border-radius: 8px; transition: all 0.2s; }
-        .radio-group label.active { border-color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+        .radio-group label.active { border-color: var(--accent); background: rgba(136, 192, 208, 0.1); }
         .radio-group input[type="radio"] { accent-color: var(--accent); }
 
         .provider-section { display: none; padding: 12px; border: 1px solid var(--primary); border-radius: 8px; margin-top: 8px; background: rgba(0,0,0,0.15); }
@@ -61,7 +61,7 @@
         .actions-left { display: flex; gap: 10px; }
 
         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .info-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(15,52,96,0.5); }
+        .info-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(76,86,106,0.5); }
         .info-label { color: var(--text-muted); font-size: 0.9em; }
         .info-value { font-weight: 600; font-size: 0.9em; }
 
