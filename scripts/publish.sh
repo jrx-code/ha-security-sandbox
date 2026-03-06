@@ -20,9 +20,14 @@ fi
 
 # --- Secret patterns to check (broad enough to catch leaks) ---
 # Patterns that indicate actual secrets (not env var references like ${VAR:-})
-# Built dynamically to avoid self-matching
-_D="iwanus"
-SECRET_PATTERNS="\.$_D\.eu|Service001|8GZiT|adm-nas|192\.168\.(18|19)\.[0-9]+"
+# Loaded from external file to avoid self-matching
+SECRETS_FILE="$(dirname "$0")/.secret_patterns"
+if [[ ! -f "$SECRETS_FILE" ]]; then
+    echo "ERROR: Missing $SECRETS_FILE"
+    echo "Create it with one regex pattern per line (grep -E format)."
+    exit 1
+fi
+SECRET_PATTERNS=$(paste -sd'|' "$SECRETS_FILE")
 
 # --- Files that must NOT appear on publish ---
 EXCLUDED_FILES=(
