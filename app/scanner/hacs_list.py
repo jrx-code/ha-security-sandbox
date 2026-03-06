@@ -100,3 +100,21 @@ def repo_to_url(repo_full_name: str) -> str:
     if repo_full_name.startswith("http"):
         return repo_full_name
     return f"https://github.com/{repo_full_name}.git"
+
+
+async def test_ha_connection(ha_url: str, ha_token: str) -> dict:
+    """Test HA connection and HACS availability."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            resp = await client.get(
+                f"{ha_url}/api/",
+                headers={"Authorization": f"Bearer {ha_token}"},
+            )
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"HTTP {resp.status_code}"}
+
+        # Test HACS
+        installed = await fetch_installed_hacs(ha_url, ha_token)
+        return {"ok": True, "hacs_count": len(installed)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
