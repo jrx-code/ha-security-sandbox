@@ -20,7 +20,7 @@ def _get_client() -> mqtt.Client:
         return _client
 
     _client = mqtt.Client(
-        client_id="hacs-sandbox",
+        client_id="ha-sandbox",
         protocol=mqtt.MQTTv5,
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
     )
@@ -41,7 +41,7 @@ def publish_discovery():
 
     device = {
         "identifiers": [node],
-        "name": "HACS Sandbox Analyzer",
+        "name": "HA Sandbox Analyzer",
         "model": "Sandbox v1.0",
         "manufacturer": "JI Engineering",
     }

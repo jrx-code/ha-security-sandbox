@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     mqtt_user: str = "mqtt_user"
     mqtt_pass: str = "changeme"
     mqtt_use_tls: bool = True
-    mqtt_node_id: str = "hacs_sandbox"
+    mqtt_node_id: str = "ha_sandbox"
 
     # Ollama
     ollama_url: str = "http://ai.example.com:11434"
