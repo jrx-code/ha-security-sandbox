@@ -6,9 +6,9 @@
     <title>HA Sandbox Analyzer</title>
     <style>
         :root {
-            --bg: #1a1a2e; --surface: #16213e; --primary: #0f3460;
-            --accent: #e94560; --text: #eee; --text-muted: #999;
-            --safe: #00c853; --caution: #ffc107; --danger: #ff1744;
+            --bg: #2e3440; --surface: #3b4252; --primary: #4c566a;
+            --accent: #88c0d0; --text: #eceff4; --text-muted: #7b8a9e;
+            --safe: #a3be8c; --caution: #ebcb8b; --danger: #bf616a;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -44,7 +44,7 @@
         th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--primary); }
         th { color: var(--text-muted); font-weight: 600; font-size: 0.85em; text-transform: uppercase; }
         td { font-size: 0.9em; }
-        tr:hover { background: rgba(15, 52, 96, 0.3); }
+        tr:hover { background: rgba(76, 86, 106, 0.3); }
 
         /* Score badges */
         .badge { padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600; display: inline-block; }
@@ -57,17 +57,17 @@
         /* Installed list */
         .installed-list { max-height: 400px; overflow-y: auto; }
         .installed-item { display: flex; justify-content: space-between; align-items: center;
-                          padding: 8px 12px; border-bottom: 1px solid rgba(15, 52, 96, 0.5); }
-        .installed-item:hover { background: rgba(15, 52, 96, 0.3); }
+                          padding: 8px 12px; border-bottom: 1px solid rgba(76, 86, 106, 0.5); }
+        .installed-item:hover { background: rgba(76, 86, 106, 0.3); }
         .installed-name { flex: 1; }
         .installed-cat { color: var(--text-muted); font-size: 0.85em; margin-right: 12px; }
 
         /* Findings detail */
         .finding { padding: 8px 12px; border-left: 3px solid; margin-bottom: 6px; background: rgba(0,0,0,0.2); border-radius: 0 6px 6px 0; }
         .finding-critical { border-color: var(--danger); }
-        .finding-high { border-color: #ff6d00; }
+        .finding-high { border-color: #d08770; }
         .finding-medium { border-color: var(--caution); }
-        .finding-low { border-color: #64b5f6; }
+        .finding-low { border-color: #81a1c1; }
         .finding-info { border-color: var(--text-muted); }
         .finding .sev { font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
         .finding .desc { font-size: 0.9em; margin-top: 2px; }
@@ -154,7 +154,7 @@
                     </td>
                     <td>
                         {% if r.stats.critical > 0 %}<span style="color:var(--danger)">{{ r.stats.critical }}C</span> {% endif %}
-                        {% if r.stats.high > 0 %}<span style="color:#ff6d00">{{ r.stats.high }}H</span> {% endif %}
+                        {% if r.stats.high > 0 %}<span style="color:#d08770">{{ r.stats.high }}H</span> {% endif %}
                         {{ r.stats.total_findings }} total
                     </td>
                     <td>{{ r.status }}</td>
