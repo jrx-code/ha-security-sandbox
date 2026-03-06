@@ -41,7 +41,7 @@ def _build_code_context(repo_path: Path, max_chars: int | None = None) -> str:
         if not f.is_file() or f.suffix not in extensions:
             continue
         rel = str(f.relative_to(repo_path))
-        if any(skip in rel for skip in ["node_modules", ".venv", "__pycache__", "test", ".git"]):
+        if any(skip in rel.split("/") for skip in ["node_modules", ".venv", "__pycache__", "tests", ".git"]):
             continue
         if any(p in rel for p in ["manifest.json", "hacs.json", "__init__.py", "const.py"]):
             priority_files.append(f)
@@ -150,21 +150,25 @@ async def _review_public_api(cfg: dict, user_prompt: str) -> dict:
 def _parse_json_response(text: str) -> dict:
     """Extract and parse JSON from AI response."""
     text = text.strip()
+    # Extract content from markdown code blocks
     if "```" in text:
-        text = text[:text.index("```")]
-    # Find matching braces
+        import re
+        m = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
+        if m:
+            text = m.group(1).strip()
+    # Find first { and matching }
+    start = text.find("{")
+    if start == -1:
+        return json.loads(text)  # will raise JSONDecodeError
     depth = 0
-    end = len(text)
-    for i, ch in enumerate(text):
-        if ch == '{':
+    for i in range(start, len(text)):
+        if text[i] == '{':
             depth += 1
-        elif ch == '}':
+        elif text[i] == '}':
             depth -= 1
             if depth == 0:
-                end = i + 1
-                break
-    text = text[:end]
-    return json.loads(text)
+                return json.loads(text[start:i + 1])
+    return json.loads(text[start:])
 
 
 async def ai_review(job: ScanJob, repo_path: Path) -> None:

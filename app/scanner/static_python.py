@@ -147,7 +147,7 @@ def scan_python_repo(repo_path: Path) -> list[Finding]:
     for pyfile in repo_path.rglob("*.py"):
         # Skip test files and venvs
         rel = str(pyfile.relative_to(repo_path))
-        if any(skip in rel for skip in ["test", ".venv", "node_modules", "__pycache__"]):
+        if any(skip in rel.split("/") for skip in ["tests", ".venv", "node_modules", "__pycache__"]):
             continue
         findings.extend(scan_python_file(pyfile))
     return findings
