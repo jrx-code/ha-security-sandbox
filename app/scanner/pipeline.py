@@ -25,28 +25,39 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
 
     try:
         # Phase 1: Clone and parse
+        log.info("[%s] Phase 1: cloning %s", job.id, repo_url)
         publish_status(f"cloning:{job.name or repo_url}")
         repo_path = fetch_and_parse(job)
+        log.info("[%s] Phase 1 done: type=%s, name=%s", job.id,
+                 job.manifest.component_type.value if job.manifest else "?", job.name)
 
         # Phase 2: Static analysis
         job.status = ScanStatus.SCANNING
+        log.info("[%s] Phase 2: static analysis", job.id)
         publish_status(f"scanning:{job.name}")
 
         comp_type = job.manifest.component_type if job.manifest else ComponentType.UNKNOWN
         if comp_type in (ComponentType.INTEGRATION, ComponentType.PYTHON_SCRIPT, ComponentType.UNKNOWN):
-            job.findings.extend(scan_python_repo(repo_path))
+            py_findings = scan_python_repo(repo_path)
+            log.info("[%s] Python scanner: %d findings", job.id, len(py_findings))
+            job.findings.extend(py_findings)
         if comp_type in (ComponentType.CARD, ComponentType.UNKNOWN):
-            job.findings.extend(scan_js_repo(repo_path))
+            js_findings = scan_js_repo(repo_path)
+            log.info("[%s] JS scanner: %d findings", job.id, len(js_findings))
+            job.findings.extend(js_findings)
 
         # Phase 4: AI review
         job.status = ScanStatus.AI_REVIEW
+        log.info("[%s] Phase 4: AI review (%d static findings)", job.id, len(job.findings))
         publish_status(f"ai_review:{job.name}")
         await ai_review(job, repo_path)
+        log.info("[%s] Phase 4 done: score=%s", job.id, job.ai_score)
 
         # Phase 5: Report
         job.status = ScanStatus.DONE
-        generate_report(job)
+        report_path = generate_report(job)
         publish_scan_result(job)
+        log.info("[%s] Done: %d findings, score=%s", job.id, len(job.findings), job.ai_score)
 
     except Exception as e:
         log.exception("Scan failed for %s", repo_url)
