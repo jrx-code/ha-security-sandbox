@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+data/repos/
+data/reports/
+sandbox-ha/config/
+.venv/
+*.egg-info/

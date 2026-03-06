@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HACS Sandbox Analyzer</title>
+    <style>
+        :root {
+            --bg: #1a1a2e; --surface: #16213e; --primary: #0f3460;
+            --accent: #e94560; --text: #eee; --text-muted: #999;
+            --safe: #00c853; --caution: #ffc107; --danger: #ff1744;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        h1 { color: var(--accent); margin-bottom: 8px; font-size: 1.6em; }
+        h2 { color: var(--text-muted); font-size: 1.1em; margin-bottom: 20px; font-weight: normal; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; background: var(--surface); border: 1px solid var(--primary); border-bottom: none;
+               border-radius: 8px 8px 0 0; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
+        .tab.active { background: var(--primary); color: var(--text); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Forms */
+        .card { background: var(--surface); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--primary); }
+        .card h3 { margin-bottom: 12px; font-size: 1em; }
+        input[type="text"], input[type="url"] {
+            width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--primary);
+            border-radius: 8px; color: var(--text); font-size: 0.95em; margin-bottom: 10px;
+        }
+        input:focus { outline: none; border-color: var(--accent); }
+        button, .btn {
+            padding: 10px 20px; background: var(--accent); color: white; border: none;
+            border-radius: 8px; cursor: pointer; font-size: 0.95em; transition: opacity 0.2s;
+        }
+        button:hover, .btn:hover { opacity: 0.85; }
+        .btn-sm { padding: 6px 14px; font-size: 0.85em; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--primary); }
+        th { color: var(--text-muted); font-weight: 600; font-size: 0.85em; text-transform: uppercase; }
+        td { font-size: 0.9em; }
+        tr:hover { background: rgba(15, 52, 96, 0.3); }
+
+        /* Score badges */
+        .badge { padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600; display: inline-block; }
+        .badge-safe { background: var(--safe); color: #000; }
+        .badge-caution { background: var(--caution); color: #000; }
+        .badge-danger { background: var(--danger); color: #fff; }
+        .badge-running { background: var(--primary); color: var(--text); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 50% { opacity: 0.6; } }
+
+        /* Installed list */
+        .installed-list { max-height: 400px; overflow-y: auto; }
+        .installed-item { display: flex; justify-content: space-between; align-items: center;
+                          padding: 8px 12px; border-bottom: 1px solid rgba(15, 52, 96, 0.5); }
+        .installed-item:hover { background: rgba(15, 52, 96, 0.3); }
+        .installed-name { flex: 1; }
+        .installed-cat { color: var(--text-muted); font-size: 0.85em; margin-right: 12px; }
+
+        /* Findings detail */
+        .finding { padding: 8px 12px; border-left: 3px solid; margin-bottom: 6px; background: rgba(0,0,0,0.2); border-radius: 0 6px 6px 0; }
+        .finding-critical { border-color: var(--danger); }
+        .finding-high { border-color: #ff6d00; }
+        .finding-medium { border-color: var(--caution); }
+        .finding-low { border-color: #64b5f6; }
+        .finding-info { border-color: var(--text-muted); }
+        .finding .sev { font-weight: 600; text-transform: uppercase; font-size: 0.8em; }
+        .finding .desc { font-size: 0.9em; margin-top: 2px; }
+        .finding .meta { font-size: 0.8em; color: var(--text-muted); }
+
+        /* Modal */
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-bg.open { display: flex; }
+        .modal { background: var(--surface); border-radius: 12px; padding: 24px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal h3 { margin-bottom: 16px; }
+        .modal-close { float: right; cursor: pointer; font-size: 1.2em; color: var(--text-muted); }
+
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--text-muted);
+                   border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>HACS Sandbox Analyzer</h1>
+    <h2>Security scanner for Home Assistant custom components</h2>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('custom')">Custom URL</div>
+        <div class="tab" onclick="switchTab('installed')">Installed HACS</div>
+        <div class="tab" onclick="switchTab('results')">Results ({{ reports|length }})</div>
+    </div>
+
+    <!-- Tab: Custom URL -->
+    <div id="tab-custom" class="tab-content active">
+        <div class="card">
+            <h3>Scan by Repository URL or GitHub path</h3>
+            <form method="POST" action="/scan/url">
+                <input type="text" name="url" placeholder="https://github.com/user/repo or user/repo" required>
+                <input type="text" name="name" placeholder="Component name (optional)">
+                <button type="submit">Scan</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tab: Installed HACS -->
+    <div id="tab-installed" class="tab-content">
+        <div class="card">
+            <h3>Installed HACS Components</h3>
+            <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Click "Scan" to analyze any installed component.
+            </p>
+            <div id="installed-list" class="installed-list">
+                <p style="color: var(--text-muted);">Loading... <span class="spinner"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Results -->
+    <div id="tab-results" class="tab-content">
+        {% if active_jobs %}
+        <div class="card">
+            <h3>Active Scans</h3>
+            {% for name, info in active_jobs.items() %}
+            <div class="installed-item">
+                <span class="installed-name">{{ name }}</span>
+                <span class="badge badge-running"><span class="spinner"></span> {{ info.get('status', 'running') }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <h3>Scan History</h3>
+            {% if reports %}
+            <table>
+                <thead><tr><th>Component</th><th>Type</th><th>Score</th><th>Findings</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                {% for r in reports %}
+                <tr>
+                    <td><strong>{{ r.name }}</strong></td>
+                    <td>{{ r.component_type }}</td>
+                    <td>
+                        {% if r.score_label == 'SAFE' %}<span class="badge badge-safe">{{ r.ai_score }}/10</span>
+                        {% elif r.score_label == 'CAUTION' %}<span class="badge badge-caution">{{ r.ai_score }}/10</span>
+                        {% elif r.score_label == 'DANGER' %}<span class="badge badge-danger">{{ r.ai_score }}/10</span>
+                        {% else %}<span class="badge">N/A</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.stats.critical > 0 %}<span style="color:var(--danger)">{{ r.stats.critical }}C</span> {% endif %}
+                        {% if r.stats.high > 0 %}<span style="color:#ff6d00">{{ r.stats.high }}H</span> {% endif %}
+                        {{ r.stats.total_findings }} total
+                    </td>
+                    <td>{{ r.status }}</td>
+                    <td><button class="btn btn-sm" onclick="showReport('{{ r.id }}')">Details</button></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: var(--text-muted);">No scans yet. Start by scanning a component above.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Report Detail Modal -->
+<div class="modal-bg" id="modal">
+    <div class="modal">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <h3 id="modal-title">Report</h3>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<script>
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+    if (name === 'installed') loadInstalled();
+}
+
+async function loadInstalled() {
+    const el = document.getElementById('installed-list');
+    try {
+        const resp = await fetch('/api/installed');
+        const data = await resp.json();
+        if (data.length === 0) {
+            el.innerHTML = '<p style="color:var(--text-muted)">No installed HACS components found. Check HA token in config.</p>';
+            return;
+        }
+        el.innerHTML = data.map(c => `
+            <div class="installed-item">
+                <span class="installed-name"><strong>${c.name}</strong> <small style="color:var(--text-muted)">${c.installed_version || ''}</small></span>
+                <span class="installed-cat">${c.category}</span>
+                <form method="POST" action="/scan/repo" style="display:inline">
+                    <input type="hidden" name="repo" value="${c.repository}">
+                    <input type="hidden" name="name" value="${c.name}">
+                    <button class="btn btn-sm" type="submit">Scan</button>
+                </form>
+            </div>
+        `).join('');
+    } catch (e) {
+        el.innerHTML = '<p style="color:var(--danger)">Failed to load: ' + e.message + '</p>';
+    }
+}
+
+async function showReport(id) {
+    const resp = await fetch('/api/report/' + id);
+    const r = await resp.json();
+    document.getElementById('modal-title').textContent = r.name + ' — Score: ' + (r.ai_score || 'N/A') + '/10';
+    let html = '<p style="margin-bottom:12px">' + (r.ai_summary || 'No AI summary') + '</p>';
+    html += '<h4 style="margin:12px 0 8px">Findings (' + r.findings.length + ')</h4>';
+    r.findings.forEach(f => {
+        html += `<div class="finding finding-${f.severity}">
+            <span class="sev">${f.severity}</span> [${f.category}]
+            <div class="desc">${f.description}</div>
+            <div class="meta">${f.file}${f.line ? ':' + f.line : ''} ${f.code ? '— <code>' + f.code.substring(0,80) + '</code>' : ''}</div>
+        </div>`;
+    });
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target.classList.contains('modal-bg')) closeModal(); });
+
+// Auto-refresh active scans
+setInterval(async () => {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    const running = Object.values(data.active_jobs).some(j => j.status === 'running');
+    if (running) {
+        // Show subtle indicator
+    } else if (Object.keys(data.active_jobs).length > 0) {
+        location.reload();
+    }
+}, 5000);
+</script>
+</body>
+</html>
