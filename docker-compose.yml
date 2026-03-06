@@ -1,0 +1,21 @@
+services:
+  hacs-sandbox:
+    build: .
+    container_name: hacs-sandbox
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./data:/data
+    env_file:
+      - /share/Container/_config/secrets-mqtt.env
+      - /share/Container/_config/secrets-ha.env
+    environment:
+      - SANDBOX_MQTT_HOST=mqtt.iwanus.eu
+      - SANDBOX_MQTT_PORT=8883
+      - SANDBOX_MQTT_USER=${MQTT_USER:-_mqtt_client}
+      - SANDBOX_MQTT_PASS=${MQTT_PASS:-Service001}
+      - SANDBOX_HA_URL=${HA_URL:-http://192.168.19.120:8123}
+      - SANDBOX_HA_TOKEN=${HA_TOKEN:-}
+      - SANDBOX_OLLAMA_URL=http://ai.iwanus.eu:11434
+      - SANDBOX_OLLAMA_MODEL=qwen2.5-coder:32b
