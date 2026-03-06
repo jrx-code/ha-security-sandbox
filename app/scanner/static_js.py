@@ -99,7 +99,7 @@ def scan_js_repo(repo_path: Path) -> list[Finding]:
         if jsfile.suffix not in extensions:
             continue
         rel = str(jsfile.relative_to(repo_path))
-        if any(skip in rel for skip in ["node_modules", ".venv", "__pycache__", "test/"]):
+        if any(skip in rel.split("/") for skip in ["node_modules", ".venv", "__pycache__", "tests"]):
             continue
         findings.extend(scan_js_file(jsfile))
     return findings
