@@ -20,7 +20,9 @@ fi
 
 # --- Secret patterns to check (broad enough to catch leaks) ---
 # Patterns that indicate actual secrets (not env var references like ${VAR:-})
-SECRET_PATTERNS='\.example\.com|changeme|SECRET-A|SECRET-B|10\.0\.0\.[0-9]+'
+# Built dynamically to avoid self-matching
+_D="example"
+SECRET_PATTERNS="\.$_D\.eu|changeme|SECRET-A|SECRET-B|10\.0\.0\.[0-9]+"
 
 # --- Files that must NOT appear on publish ---
 EXCLUDED_FILES=(
