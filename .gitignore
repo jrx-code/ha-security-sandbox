@@ -11,3 +11,4 @@ sandbox-ha/config/
 .venv/
 *.egg-info/
 .pytest_cache/
+scripts/.secret_patterns
