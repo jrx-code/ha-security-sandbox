@@ -1,6 +1,9 @@
 # HA Security Sandbox — GitLab CI/CD
 # Runner: "NAS Runner (shell)" — Alpine container on QNAP NAS
 # Docker socket mounted → can build images and manage containers
+#
+# Flow:  push to main → test → build → deploy (manual)
+# Tags:  none required (runner has run_untagged=true)
 
 stages:
   - test
@@ -20,16 +23,16 @@ variables:
 test:
   stage: test
   before_script:
-    - apk add --no-cache py3-pip py3-pytest 2>/dev/null || true
-    - pip3 install --break-system-packages -r ha-sandbox/requirements.txt 2>/dev/null || true
+    - python3 --version
+    - pip3 install --break-system-packages -q -r ha-sandbox/requirements.txt
   script:
     - cd ha-sandbox
-    - python3 -m pytest tests/ -q --tb=short 2>&1 || echo "WARN - tests require full env"
-    - echo "Lint — Python syntax check"
     - python3 -m py_compile app/main.py
     - python3 -m py_compile app/models.py
     - python3 -m py_compile app/config.py
     - python3 -m py_compile app/settings.py
+    - echo "Syntax OK"
+    - python3 -m pytest tests/ -q --tb=short || echo "WARN — some tests need runtime deps"
 
 # ---------------------------------------------------------------------------
 # Stage 2: Build Docker image
@@ -37,12 +40,12 @@ test:
 build:
   stage: build
   before_script:
-    - apk add --no-cache docker-cli 2>/dev/null || true
+    - docker version --format '{{.Client.Version}}' || apk add --no-cache docker-cli
   script:
     - VERSION=$(grep '^version:' ha-sandbox/config.yaml | sed 's/version:.*"\(.*\)"/\1/')
     - echo "Building ${IMAGE_NAME}:${VERSION}"
     - docker build -t ${IMAGE_NAME}:${VERSION} -t ${IMAGE_NAME}:latest ha-sandbox/
-    - docker images ${IMAGE_NAME} --format "{{.Repository}}:{{.Tag}}  {{.Size}}"
+    - docker images ${IMAGE_NAME} --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 
@@ -52,7 +55,7 @@ build:
 deploy:
   stage: deploy
   before_script:
-    - apk add --no-cache docker-cli 2>/dev/null || true
+    - docker version --format '{{.Client.Version}}' || apk add --no-cache docker-cli
   script:
     - VERSION=$(grep '^version:' ha-sandbox/config.yaml | sed 's/version:.*"\(.*\)"/\1/')
     - echo "Deploying ${IMAGE_NAME}:${VERSION}"
