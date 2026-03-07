@@ -1,13 +1,13 @@
 # HA Security Sandbox — GitLab CI/CD
-# Runner: "NAS Runner (shell)" — Alpine container on QNAP NAS
-# Docker socket mounted → can build images and manage containers
 #
-# Push to main triggers full pipeline:
-#   test → security → build → deploy → github-mirror
+# Branch workflow:
+#   main     → lint + test (clean code gate)
+#   publish  → lint + test + security + build + deploy + github mirror
 #
-# Other branches: test + security only
+# Local command: make publish (orchestrates the full chain)
 
 stages:
+  - lint
   - test
   - security
   - build
@@ -20,27 +20,39 @@ variables:
   DEPLOY_NETWORK: ollama_internal
   DEPLOY_PORT: "8099"
   DEPLOY_VOLUME: /share/Container/engines/ha-sandbox/data:/data
-  GITHUB_REPO: https://github.com/jrx-code/ha-security-sandbox.git
 
-# ---------------------------------------------------------------------------
-# Stage 1: Lint + Test
-# ---------------------------------------------------------------------------
+# ===== STAGE: LINT (main + publish) =========================================
+lint:
+  stage: lint
+  before_script:
+    - pip3 install --break-system-packages -q ruff 2>/dev/null || true
+  script:
+    - cd ha-sandbox
+    - echo "=== Ruff lint ==="
+    - python3 -m ruff check app/ --output-format text || true
+    - echo "=== Ruff format check ==="
+    - python3 -m ruff format --check app/ 2>&1 || echo "WARN — formatting issues found"
+    - echo "=== Python syntax ==="
+    - python3 -m py_compile app/main.py
+    - python3 -m py_compile app/models.py
+    - python3 -m py_compile app/config.py
+    - python3 -m py_compile app/settings.py
+    - echo "Lint OK"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "publish"
+
+# ===== STAGE: TEST (main + publish) =========================================
 test:
   stage: test
   before_script:
     - pip3 install --break-system-packages -q -r ha-sandbox/requirements.txt 2>/dev/null || true
   script:
     - cd ha-sandbox
-    - python3 -m py_compile app/main.py
-    - python3 -m py_compile app/models.py
-    - python3 -m py_compile app/config.py
-    - python3 -m py_compile app/settings.py
-    - echo "Syntax OK"
     - python3 -m pytest tests/ -q --tb=short || echo "WARN — some tests need runtime deps"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "publish"
 
-# ---------------------------------------------------------------------------
-# Stage 2: Security scan (bandit + pip-audit)
-# ---------------------------------------------------------------------------
+# ===== STAGE: SECURITY (publish only) =======================================
 security:
   stage: security
   before_script:
@@ -49,14 +61,13 @@ security:
     - cd ha-sandbox
     - echo "=== Bandit (Python security linter) ==="
     - python3 -m bandit -r app/ -ll -q --format txt || true
-    - echo "=== pip-audit (dependency vulnerabilities) ==="
+    - echo "=== pip-audit (dependency CVEs) ==="
     - python3 -m pip_audit -r requirements.txt --desc 2>/dev/null || echo "WARN — pip-audit needs network"
-    - echo "Security scan complete"
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "publish"
 
-# ---------------------------------------------------------------------------
-# Stage 3: Build Docker image
-# ---------------------------------------------------------------------------
+# ===== STAGE: BUILD (publish only) ==========================================
 build:
   stage: build
   before_script:
@@ -73,11 +84,9 @@ build:
       ha-sandbox/
     - docker images ${IMAGE_NAME} --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "publish"
 
-# ---------------------------------------------------------------------------
-# Stage 4: Deploy (auto on main)
-# ---------------------------------------------------------------------------
+# ===== STAGE: DEPLOY (publish only) =========================================
 deploy:
   stage: deploy
   before_script:
@@ -110,26 +119,23 @@ deploy:
       if echo "$STATUS" | grep -q "Up"; then
         echo "Deploy OK: $STATUS"
       else
-        echo "Deploy FAILED: container not running"
+        echo "Deploy FAILED"
         docker logs ${CONTAINER_NAME} --tail 20
         exit 1
       fi
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "publish"
   environment:
     name: staging
     url: http://192.168.19.250:8099
 
-# ---------------------------------------------------------------------------
-# Stage 5: Push to GitHub (mirror)
-# ---------------------------------------------------------------------------
+# ===== STAGE: GITHUB MIRROR (publish only) ==================================
 github-mirror:
   stage: mirror
   script:
-    - echo "Pushing to GitHub..."
     - git remote set-url github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/ha-security-sandbox.git 2>/dev/null || git remote add github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/ha-security-sandbox.git
     - git push github HEAD:main --force
     - git push github --tags --force 2>/dev/null || true
     - echo "GitHub mirror OK"
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "publish"
