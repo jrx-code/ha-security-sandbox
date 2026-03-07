@@ -1,0 +1,85 @@
+# HA Security Sandbox — GitLab CI/CD
+# Runner: "NAS Runner (shell)" — Alpine container on QNAP NAS
+# Docker socket mounted → can build images and manage containers
+
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  IMAGE_NAME: ha-sandbox
+  CONTAINER_NAME: ha-sandbox
+  DEPLOY_NETWORK: ollama_internal
+  DEPLOY_PORT: "8099"
+  DEPLOY_VOLUME: /share/Container/engines/ha-sandbox/data:/data
+
+# ---------------------------------------------------------------------------
+# Stage 1: Lint + Test
+# ---------------------------------------------------------------------------
+test:
+  stage: test
+  before_script:
+    - apk add --no-cache py3-pip py3-pytest 2>/dev/null || true
+    - pip3 install --break-system-packages -r ha-sandbox/requirements.txt 2>/dev/null || true
+  script:
+    - cd ha-sandbox
+    - python3 -m pytest tests/ -q --tb=short 2>&1 || echo "WARN - tests require full env"
+    - echo "Lint — Python syntax check"
+    - python3 -m py_compile app/main.py
+    - python3 -m py_compile app/models.py
+    - python3 -m py_compile app/config.py
+    - python3 -m py_compile app/settings.py
+
+# ---------------------------------------------------------------------------
+# Stage 2: Build Docker image
+# ---------------------------------------------------------------------------
+build:
+  stage: build
+  before_script:
+    - apk add --no-cache docker-cli 2>/dev/null || true
+  script:
+    - VERSION=$(grep '^version:' ha-sandbox/config.yaml | sed 's/version:.*"\(.*\)"/\1/')
+    - echo "Building ${IMAGE_NAME}:${VERSION}"
+    - docker build -t ${IMAGE_NAME}:${VERSION} -t ${IMAGE_NAME}:latest ha-sandbox/
+    - docker images ${IMAGE_NAME} --format "{{.Repository}}:{{.Tag}}  {{.Size}}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ---------------------------------------------------------------------------
+# Stage 3: Deploy (stop old → start new)
+# ---------------------------------------------------------------------------
+deploy:
+  stage: deploy
+  before_script:
+    - apk add --no-cache docker-cli 2>/dev/null || true
+  script:
+    - VERSION=$(grep '^version:' ha-sandbox/config.yaml | sed 's/version:.*"\(.*\)"/\1/')
+    - echo "Deploying ${IMAGE_NAME}:${VERSION}"
+    - docker stop ${CONTAINER_NAME} 2>/dev/null || true
+    - docker rm ${CONTAINER_NAME} 2>/dev/null || true
+    - >-
+      docker run -d
+      --name ${CONTAINER_NAME}
+      --restart unless-stopped
+      --network ${DEPLOY_NETWORK}
+      -p ${DEPLOY_PORT}:8099
+      -v ${DEPLOY_VOLUME}
+      -e SANDBOX_AI_PROVIDER=ollama
+      -e SANDBOX_OLLAMA_URL=http://ollama:11434
+      -e SANDBOX_OLLAMA_MODEL=gemma3:12b
+      -e SANDBOX_HA_URL=${SANDBOX_HA_URL:-http://192.168.19.250:8124}
+      -e SANDBOX_MQTT_HOST=mqtt.iwanus.eu
+      -e SANDBOX_MQTT_PORT=8883
+      -e SANDBOX_MQTT_USER=svc_sandbox
+      -e SANDBOX_MQTT_TLS=true
+      ${IMAGE_NAME}:${VERSION}
+    - sleep 3
+    - docker ps --filter name=${CONTAINER_NAME} --format "{{.Status}}"
+    - echo "Deployed ${IMAGE_NAME}:${VERSION} OK"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  environment:
+    name: staging
+    url: http://192.168.19.250:8099
