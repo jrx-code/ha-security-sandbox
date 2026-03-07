@@ -1,0 +1,57 @@
+name: "HA Security Sandbox"
+version: "0.5.0"
+slug: ha_security_sandbox
+description: "Security scanner for Home Assistant custom components — static analysis + AI review"
+url: "https://gitlab.iwanus.eu/jiwanus/ha-sandbox"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+
+# Ingress (HA built-in reverse proxy with SSO)
+ingress: true
+ingress_port: 8099
+ingress_entry: /
+panel_icon: mdi:shield-search
+panel_title: Security Sandbox
+
+# HA APIs
+hassio_api: true
+homeassistant_api: true
+auth_api: true
+
+# Storage
+map:
+  - share:rw
+
+# Network (for MQTT, Ollama)
+ports:
+  8099/tcp: null
+host_network: false
+
+# User-configurable options
+options:
+  ai_provider: ollama
+  ollama_url: "http://homeassistant:11434"
+  ollama_model: "gemma3:12b"
+  public_provider: openrouter
+  public_api_key: ""
+  public_model: "google/gemma-3-27b-it"
+  public_url: "https://openrouter.ai/api/v1"
+  mqtt_enabled: true
+  mqtt_tls: true
+  log_level: info
+
+schema:
+  ai_provider: "list(ollama|public)"
+  ollama_url: "url"
+  ollama_model: "str"
+  public_provider: "list(openrouter|openai)"
+  public_api_key: "str?"
+  public_model: "str?"
+  public_url: "url?"
+  mqtt_enabled: "bool"
+  mqtt_tls: "bool"
+  log_level: "list(debug|info|warning|error)"

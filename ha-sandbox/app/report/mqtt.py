@@ -35,6 +35,8 @@ def _get_client() -> mqtt.Client:
 
 def publish_discovery():
     """Publish MQTT auto-discovery config for HA sensor."""
+    from app.main import __version__
+
     client = _get_client()
     node = settings.mqtt_node_id
     base = f"homeassistant/sensor/{node}"
@@ -42,7 +44,7 @@ def publish_discovery():
     device = {
         "identifiers": [node],
         "name": "HA Sandbox Analyzer",
-        "model": "Sandbox v0.4.0",
+        "model": f"Sandbox v{__version__}",
         "manufacturer": "JI Engineering",
     }
 

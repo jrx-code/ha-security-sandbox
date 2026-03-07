@@ -1,0 +1,31 @@
+configuration:
+  ai_provider:
+    name: AI Provider
+    description: Choose between local Ollama or a public API for AI analysis.
+  ollama_url:
+    name: Ollama URL
+    description: URL of your Ollama instance (e.g. http://homeassistant:11434).
+  ollama_model:
+    name: Ollama Model
+    description: Model to use for analysis (e.g. gemma3:12b).
+  public_provider:
+    name: Public API Provider
+    description: Public API provider (openrouter or openai).
+  public_api_key:
+    name: Public API Key
+    description: API key for the public provider.
+  public_model:
+    name: Public Model
+    description: Model name for the public API.
+  public_url:
+    name: Public API URL
+    description: Base URL for the public API.
+  mqtt_enabled:
+    name: MQTT Enabled
+    description: Enable MQTT discovery for Home Assistant sensors.
+  mqtt_tls:
+    name: MQTT TLS
+    description: Use TLS for MQTT connection.
+  log_level:
+    name: Log Level
+    description: Application log verbosity.

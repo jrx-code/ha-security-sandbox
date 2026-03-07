@@ -10,14 +10,24 @@ class Settings(BaseSettings):
     mqtt_user: str = ""
     mqtt_pass: str = ""
     mqtt_use_tls: bool = True
+    mqtt_enabled: bool = True
     mqtt_node_id: str = "ha_sandbox"
+
+    # AI provider
+    ai_provider: str = "ollama"  # "ollama" or "public"
 
     # Ollama
     ollama_url: str = "http://ollama:11434"
     ollama_model: str = "gemma3:12b"
 
+    # Public API
+    public_provider: str = "openrouter"
+    public_api_key: str = ""
+    public_model: str = "google/gemma-3-27b-it"
+    public_url: str = "https://openrouter.ai/api/v1"
+
     # Home Assistant (for installed HACS list)
-    ha_url: str = "http://homeassistant:8123"
+    ha_url: str = "http://supervisor/core"
     ha_token: str = ""
 
     # Paths
@@ -31,11 +41,12 @@ class Settings(BaseSettings):
     model_config = {"env_prefix": "SANDBOX_", "env_file": ".env"}
 
 
-# Fallback: read HA_TOKEN and HA_URL directly from env if SANDBOX_ prefixed are empty
 _settings = Settings()
+
+# Fallback: read HA supervisor token and legacy env vars
 if not _settings.ha_token:
-    _settings.ha_token = os.environ.get("HA_TOKEN", "")
-if _settings.ha_url == "http://homeassistant:8123":
+    _settings.ha_token = os.environ.get("SUPERVISOR_TOKEN", os.environ.get("HA_TOKEN", ""))
+if _settings.ha_url == "http://supervisor/core":
     _settings.ha_url = os.environ.get("HA_URL", _settings.ha_url)
 
 settings = _settings

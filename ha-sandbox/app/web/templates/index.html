@@ -94,14 +94,14 @@
         <div class="tab active" onclick="switchTab('custom')">Custom URL</div>
         <div class="tab" onclick="switchTab('installed')">Installed HACS</div>
         <div class="tab" onclick="switchTab('results')">Results ({{ reports|length }})</div>
-        <a href="/settings" class="tab" style="text-decoration:none; margin-left:auto;">Settings</a>
+        <a href="{{ base }}/settings" class="tab" style="text-decoration:none; margin-left:auto;">Settings</a>
     </div>
 
     <!-- Tab: Custom URL -->
     <div id="tab-custom" class="tab-content active">
         <div class="card">
             <h3>Scan by Repository URL or GitHub path</h3>
-            <form method="POST" action="/scan/url">
+            <form method="POST" action="{{ base }}/scan/url">
                 <input type="text" name="url" placeholder="https://github.com/user/repo or user/repo" required>
                 <input type="text" name="name" placeholder="Component name (optional)">
                 <button type="submit">Scan</button>
@@ -185,6 +185,7 @@
 </div>
 
 <script>
+const BASE = '{{ base }}';
 function switchTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab:not([href])').forEach(el => el.classList.remove('active'));
@@ -203,7 +204,7 @@ function switchTab(name) {
 async function loadInstalled() {
     const el = document.getElementById('installed-list');
     try {
-        const resp = await fetch('/api/installed');
+        const resp = await fetch(BASE + '/api/installed');
         const data = await resp.json();
         if (data.length === 0) {
             el.innerHTML = '<p style="color:var(--text-muted)">No installed HACS components found. Check HA token in config.</p>';
@@ -213,7 +214,7 @@ async function loadInstalled() {
             <div class="installed-item">
                 <span class="installed-name"><strong>${c.name}</strong> <small style="color:var(--text-muted)">${c.installed_version || ''}</small></span>
                 <span class="installed-cat">${c.category}</span>
-                <form method="POST" action="/scan/repo" style="display:inline">
+                <form method="POST" action="${BASE}/scan/repo" style="display:inline">
                     <input type="hidden" name="repo" value="${c.repository}">
                     <input type="hidden" name="name" value="${c.name}">
                     <button class="btn btn-sm" type="submit">Scan</button>
@@ -226,7 +227,7 @@ async function loadInstalled() {
 }
 
 async function showReport(id) {
-    const resp = await fetch('/api/report/' + id);
+    const resp = await fetch(BASE + '/api/report/' + id);
     const r = await resp.json();
     document.getElementById('modal-title').textContent = r.name + ' — Score: ' + (r.ai_score || 'N/A') + '/10';
     let html = '<p style="margin-bottom:12px">' + (r.ai_summary || 'No AI summary') + '</p>';
@@ -244,8 +245,8 @@ async function showReport(id) {
 
 async function clearResults() {
     if (!confirm('Delete all scan reports and cached repos?')) return;
-    await fetch('/api/reports/clear', {method:'POST'});
-    await fetch('/api/cache/clear', {method:'POST'});
+    await fetch(BASE + '/api/reports/clear', {method:'POST'});
+    await fetch(BASE + '/api/cache/clear', {method:'POST'});
     location.reload();
 }
 
@@ -254,7 +255,7 @@ document.getElementById('modal').addEventListener('click', e => { if (e.target.c
 
 // Auto-refresh active scans
 setInterval(async () => {
-    const resp = await fetch('/api/status');
+    const resp = await fetch(BASE + '/api/status');
     const data = await resp.json();
     const running = Object.values(data.active_jobs).some(j => j.status === 'running');
     if (running) {

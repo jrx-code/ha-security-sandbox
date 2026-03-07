@@ -1,0 +1,45 @@
+#include <tunables/global>
+
+profile ha_security_sandbox flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Network access (git clone, API calls, MQTT)
+  network inet stream,
+  network inet dgram,
+  network inet6 stream,
+  network inet6 dgram,
+
+  # Application files
+  /app/** r,
+  /run.sh rx,
+
+  # Python
+  /usr/local/bin/python3* rix,
+  /usr/local/lib/python3*/** r,
+  /usr/lib/python3*/** r,
+
+  # Git
+  /usr/bin/git rix,
+  /usr/libexec/git-core/** rix,
+
+  # Data directories
+  /data/** rw,
+  /share/ha-sandbox/** rw,
+
+  # Config
+  /config.yaml r,
+
+  # Temp
+  /tmp/** rw,
+  /proc/** r,
+  /sys/fs/cgroup/** r,
+
+  # DNS resolution
+  /etc/hosts r,
+  /etc/resolv.conf r,
+  /etc/nsswitch.conf r,
+
+  # SSL certificates
+  /etc/ssl/** r,
+  /usr/share/ca-certificates/** r,
+}

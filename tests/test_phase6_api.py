@@ -94,7 +94,7 @@ class TestScanAPI:
                                data={"url": "https://github.com/test/repo", "name": "Test"},
                                follow_redirects=False)
         assert resp.status_code == 303
-        assert resp.headers["location"] == "/"
+        assert resp.headers["location"] == "/#results"
 
     def test_scan_url_auto_prefix(self, client):
         with patch("app.main._run_scan_background"):
