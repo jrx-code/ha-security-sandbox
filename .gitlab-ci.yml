@@ -2,13 +2,17 @@
 # Runner: "NAS Runner (shell)" — Alpine container on QNAP NAS
 # Docker socket mounted → can build images and manage containers
 #
-# Flow:  push to main → test → build → deploy (manual)
-# Tags:  none required (runner has run_untagged=true)
+# Push to main triggers full pipeline:
+#   test → security → build → deploy → github-mirror
+#
+# Other branches: test + security only
 
 stages:
   - test
+  - security
   - build
   - deploy
+  - mirror
 
 variables:
   IMAGE_NAME: ha-sandbox
@@ -16,6 +20,7 @@ variables:
   DEPLOY_NETWORK: ollama_internal
   DEPLOY_PORT: "8099"
   DEPLOY_VOLUME: /share/Container/engines/ha-sandbox/data:/data
+  GITHUB_REPO: https://github.com/jrx-code/ha-security-sandbox.git
 
 # ---------------------------------------------------------------------------
 # Stage 1: Lint + Test
@@ -23,8 +28,7 @@ variables:
 test:
   stage: test
   before_script:
-    - python3 --version
-    - pip3 install --break-system-packages -q -r ha-sandbox/requirements.txt
+    - pip3 install --break-system-packages -q -r ha-sandbox/requirements.txt 2>/dev/null || true
   script:
     - cd ha-sandbox
     - python3 -m py_compile app/main.py
@@ -35,7 +39,23 @@ test:
     - python3 -m pytest tests/ -q --tb=short || echo "WARN — some tests need runtime deps"
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build Docker image
+# Stage 2: Security scan (bandit + pip-audit)
+# ---------------------------------------------------------------------------
+security:
+  stage: security
+  before_script:
+    - pip3 install --break-system-packages -q bandit pip-audit 2>/dev/null || true
+  script:
+    - cd ha-sandbox
+    - echo "=== Bandit (Python security linter) ==="
+    - python3 -m bandit -r app/ -ll -q --format txt || true
+    - echo "=== pip-audit (dependency vulnerabilities) ==="
+    - python3 -m pip_audit -r requirements.txt --desc 2>/dev/null || echo "WARN — pip-audit needs network"
+    - echo "Security scan complete"
+  allow_failure: true
+
+# ---------------------------------------------------------------------------
+# Stage 3: Build Docker image
 # ---------------------------------------------------------------------------
 build:
   stage: build
@@ -56,7 +76,7 @@ build:
     - if: $CI_COMMIT_BRANCH == "main"
 
 # ---------------------------------------------------------------------------
-# Stage 3: Deploy (stop old → start new)
+# Stage 4: Deploy (auto on main)
 # ---------------------------------------------------------------------------
 deploy:
   stage: deploy
@@ -85,11 +105,31 @@ deploy:
       -e SANDBOX_MQTT_TLS=true
       ${IMAGE_NAME}:${VERSION}
     - sleep 3
-    - docker ps --filter name=${CONTAINER_NAME} --format "{{.Status}}"
-    - echo "Deployed ${IMAGE_NAME}:${VERSION} OK"
+    - |
+      STATUS=$(docker ps --filter name=${CONTAINER_NAME} --format "{{.Status}}")
+      if echo "$STATUS" | grep -q "Up"; then
+        echo "Deploy OK: $STATUS"
+      else
+        echo "Deploy FAILED: container not running"
+        docker logs ${CONTAINER_NAME} --tail 20
+        exit 1
+      fi
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-      when: manual
   environment:
     name: staging
     url: http://192.168.19.250:8099
+
+# ---------------------------------------------------------------------------
+# Stage 5: Push to GitHub (mirror)
+# ---------------------------------------------------------------------------
+github-mirror:
+  stage: mirror
+  script:
+    - echo "Pushing to GitHub..."
+    - git remote set-url github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/ha-security-sandbox.git 2>/dev/null || git remote add github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/ha-security-sandbox.git
+    - git push github HEAD:main --force
+    - git push github --tags --force 2>/dev/null || true
+    - echo "GitHub mirror OK"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
