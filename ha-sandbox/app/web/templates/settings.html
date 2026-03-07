@@ -74,7 +74,7 @@
 <body>
 <div class="container">
     <h1>Settings</h1>
-    <p class="subtitle"><a href="/">Back to Scanner</a></p>
+    <p class="subtitle"><a href="{{ base }}/">Back to Scanner</a></p>
 
     <!-- AI Provider -->
     <div class="section">
@@ -221,7 +221,7 @@
     <div class="actions">
         <div class="actions-left">
             <button onclick="saveSettings()">Save Settings</button>
-            <a href="/" class="btn btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;">Cancel</a>
+            <a href="{{ base }}/" class="btn btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;">Cancel</a>
         </div>
     </div>
 </div>
@@ -229,6 +229,7 @@
 <div class="saved-toast" id="toast">Settings saved</div>
 
 <script>
+const BASE = '{{ base }}';
 const PRESETS = {{ provider_presets | tojson }};
 
 function switchProvider(p) {
@@ -253,7 +254,7 @@ async function loadOllamaModels() {
     const sel = document.getElementById('ollama_model');
     const current = sel.value;
     try {
-        const resp = await fetch('/api/ollama/models?url=' + encodeURIComponent(url));
+        const resp = await fetch(BASE + '/api/ollama/models?url=' + encodeURIComponent(url));
         const data = await resp.json();
         if (data.models.length > 0) {
             sel.innerHTML = data.models.map(m =>
@@ -273,7 +274,7 @@ async function testOllama() {
     const el = document.getElementById('ollama-test');
     el.className = 'test-result test-loading'; el.textContent = 'Testing...';
     try {
-        const resp = await fetch('/api/test/ollama', {
+        const resp = await fetch(BASE + '/api/test/ollama', {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({url: document.getElementById('ollama_url').value, model: document.getElementById('ollama_model').value})
         });
@@ -286,7 +287,7 @@ async function testPublic() {
     const el = document.getElementById('public-test');
     el.className = 'test-result test-loading'; el.textContent = 'Testing...';
     try {
-        const resp = await fetch('/api/test/public', {
+        const resp = await fetch(BASE + '/api/test/public', {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({url: document.getElementById('public_url').value, api_key: document.getElementById('public_api_key').value, model: document.getElementById('public_model').value})
         });
@@ -299,7 +300,7 @@ async function testHA() {
     const el = document.getElementById('ha-test');
     el.className = 'test-result test-loading'; el.textContent = 'Testing...';
     try {
-        const resp = await fetch('/api/test/ha', {
+        const resp = await fetch(BASE + '/api/test/ha', {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({url: document.getElementById('ha_url').value, token: document.getElementById('ha_token').value})
         });
@@ -312,7 +313,7 @@ async function testMQTT() {
     const el = document.getElementById('mqtt-test');
     el.className = 'test-result test-loading'; el.textContent = 'Testing...';
     try {
-        const resp = await fetch('/api/test/mqtt', {
+        const resp = await fetch(BASE + '/api/test/mqtt', {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({
                 host: document.getElementById('mqtt_host').value,
@@ -352,7 +353,7 @@ function gatherSettings() {
 
 async function saveSettings() {
     const data = gatherSettings();
-    const resp = await fetch('/api/settings', {
+    const resp = await fetch(BASE + '/api/settings', {
         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
     });
     if (resp.ok) {
@@ -364,19 +365,19 @@ async function saveSettings() {
 
 async function clearCache() {
     if (!confirm('Clear all cached repositories?')) return;
-    await fetch('/api/cache/clear', {method:'POST'});
+    await fetch(BASE + '/api/cache/clear', {method:'POST'});
     loadSystemInfo();
 }
 
 async function clearReports() {
     if (!confirm('Delete all scan reports?')) return;
-    await fetch('/api/reports/clear', {method:'POST'});
+    await fetch(BASE + '/api/reports/clear', {method:'POST'});
     loadSystemInfo();
 }
 
 async function loadSystemInfo() {
     try {
-        const resp = await fetch('/api/system');
+        const resp = await fetch(BASE + '/api/system');
         const d = await resp.json();
         document.getElementById('system-info').innerHTML = `
             <div class="info-item"><span class="info-label">Version</span><span class="info-value">${d.version}</span></div>

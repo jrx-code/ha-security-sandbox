@@ -1,6 +1,8 @@
+# Development docker-compose — runs outside HA Supervisor
+# For HA Add-on deployment, use config.yaml + build.yaml instead
 services:
   ha-sandbox:
-    build: .
+    build: ha-sandbox/
     container_name: ha-sandbox
     restart: unless-stopped
     ports:
@@ -16,3 +18,4 @@ services:
       - SANDBOX_MQTT_PASS=${MQTT_PASS:-}
       - SANDBOX_OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
       - SANDBOX_OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8099"]

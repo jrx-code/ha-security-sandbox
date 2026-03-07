@@ -1,6 +1,7 @@
-"""HA Sandbox Analyzer — FastAPI application."""
+"""HA Sandbox Analyzer — FastAPI application (HA Add-on)."""
 
 import logging
+import os
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,9 +23,22 @@ log = logging.getLogger(__name__)
 _active_jobs: dict[str, dict] = {}
 
 
+def _read_version() -> str:
+    """Read version from config.yaml (HA add-on single source of truth)."""
+    for p in (Path("/config.yaml"), Path(__file__).parents[1] / "config.yaml"):
+        if p.exists():
+            for line in p.read_text().splitlines():
+                if line.startswith("version:"):
+                    return line.split(":", 1)[1].strip().strip('"').strip("'")
+    return os.environ.get("BUILD_VERSION", "dev")
+
+
+__version__ = _read_version()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("HA Sandbox Analyzer starting")
+    log.info("HA Sandbox Analyzer v%s starting", __version__)
     app_settings.init_from_env()
     try:
         publish_discovery()
@@ -35,10 +49,17 @@ async def lifespan(app: FastAPI):
     disconnect()
 
 
-__version__ = "0.4.0"
-
 app = FastAPI(title="HA Sandbox Analyzer", version=__version__, lifespan=lifespan)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "templates"))
+
+
+@app.middleware("http")
+async def ingress_middleware(request: Request, call_next):
+    """Support HA ingress by reading X-Ingress-Path header."""
+    ingress_path = request.headers.get("X-Ingress-Path", "")
+    request.state.ingress_path = ingress_path
+    response = await call_next(request)
+    return response
 
 
 async def _run_scan_background(repo_url: str, name: str):
@@ -56,38 +77,47 @@ async def _run_scan_background(repo_url: str, name: str):
 
 # --- Pages ---
 
+def _ctx(request: Request, extra: dict | None = None) -> dict:
+    """Build template context with ingress base path."""
+    ctx = {"request": request, "base": getattr(request.state, "ingress_path", "")}
+    if extra:
+        ctx.update(extra)
+    return ctx
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     reports = load_all_reports()
-    return templates.TemplateResponse("index.html", {
-        "request": request, "reports": reports, "active_jobs": _active_jobs,
-    })
+    return templates.TemplateResponse("index.html", _ctx(request, {
+        "reports": reports, "active_jobs": _active_jobs,
+    }))
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     cfg = app_settings.load()
-    return templates.TemplateResponse("settings.html", {
-        "request": request, "cfg": cfg,
-        "provider_presets": app_settings.PROVIDER_PRESETS,
-    })
+    return templates.TemplateResponse("settings.html", _ctx(request, {
+        "cfg": cfg, "provider_presets": app_settings.PROVIDER_PRESETS,
+    }))
 
 
 # --- Scan API ---
 
 @app.post("/scan/url")
-async def scan_url(background_tasks: BackgroundTasks, url: str = Form(...), name: str = Form("")):
+async def scan_url(request: Request, background_tasks: BackgroundTasks, url: str = Form(...), name: str = Form("")):
     if not url.startswith("http"):
         url = f"https://github.com/{url}.git"
     background_tasks.add_task(_run_scan_background, url, name)
-    return RedirectResponse("/#results", status_code=303)
+    base = getattr(request.state, "ingress_path", "")
+    return RedirectResponse(f"{base}/#results", status_code=303)
 
 
 @app.post("/scan/repo")
-async def scan_repo(background_tasks: BackgroundTasks, repo: str = Form(...), name: str = Form("")):
+async def scan_repo(request: Request, background_tasks: BackgroundTasks, repo: str = Form(...), name: str = Form("")):
     url = repo_to_url(repo)
     background_tasks.add_task(_run_scan_background, url, name)
-    return RedirectResponse("/#results", status_code=303)
+    base = getattr(request.state, "ingress_path", "")
+    return RedirectResponse(f"{base}/#results", status_code=303)
 
 
 # --- Data API ---
