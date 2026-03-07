@@ -80,14 +80,14 @@ async def scan_url(background_tasks: BackgroundTasks, url: str = Form(...), name
     if not url.startswith("http"):
         url = f"https://github.com/{url}.git"
     background_tasks.add_task(_run_scan_background, url, name)
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/#results", status_code=303)
 
 
 @app.post("/scan/repo")
 async def scan_repo(background_tasks: BackgroundTasks, repo: str = Form(...), name: str = Form("")):
     url = repo_to_url(repo)
     background_tasks.add_task(_run_scan_background, url, name)
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/#results", status_code=303)
 
 
 # --- Data API ---

@@ -187,11 +187,18 @@
 <script>
 function switchTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab:not([href])').forEach(el => el.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
-    event.target.classList.add('active');
+    document.querySelector(`.tab[onclick*="'${name}'"]`).classList.add('active');
+    location.hash = name;
     if (name === 'installed') loadInstalled();
 }
+
+// Restore tab from URL hash on load
+(function() {
+    const hash = location.hash.replace('#', '');
+    if (hash && document.getElementById('tab-' + hash)) switchTab(hash);
+})();
 
 async function loadInstalled() {
     const el = document.getElementById('installed-list');
@@ -253,6 +260,7 @@ setInterval(async () => {
     if (running) {
         // Show subtle indicator
     } else if (Object.keys(data.active_jobs).length > 0) {
+        if (!location.hash) location.hash = 'results';
         location.reload();
     }
 }, 5000);
