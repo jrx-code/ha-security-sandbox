@@ -40,11 +40,17 @@ test:
 build:
   stage: build
   before_script:
+    - chmod 666 /var/run/docker.sock 2>/dev/null || true
     - docker version --format '{{.Client.Version}}' || apk add --no-cache docker-cli
   script:
     - VERSION=$(grep '^version:' ha-sandbox/config.yaml | sed 's/version:.*"\(.*\)"/\1/')
     - echo "Building ${IMAGE_NAME}:${VERSION}"
-    - docker build -t ${IMAGE_NAME}:${VERSION} -t ${IMAGE_NAME}:latest ha-sandbox/
+    - >-
+      docker build
+      --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.13
+      -t ${IMAGE_NAME}:${VERSION}
+      -t ${IMAGE_NAME}:latest
+      ha-sandbox/
     - docker images ${IMAGE_NAME} --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
@@ -55,6 +61,7 @@ build:
 deploy:
   stage: deploy
   before_script:
+    - chmod 666 /var/run/docker.sock 2>/dev/null || true
     - docker version --format '{{.Client.Version}}' || apk add --no-cache docker-cli
   script:
     - VERSION=$(grep '^version:' ha-sandbox/config.yaml | sed 's/version:.*"\(.*\)"/\1/')
