@@ -76,7 +76,7 @@
         /* Modal */
         .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
         .modal-bg.open { display: flex; }
-        .modal { background: var(--surface); border-radius: 12px; padding: 24px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal { background: var(--surface); border-radius: 12px; padding: 24px; max-width: 900px; width: 95%; max-height: 80vh; overflow-y: auto; }
         .modal h3 { margin-bottom: 16px; }
         .modal-close { float: right; cursor: pointer; font-size: 1.2em; color: var(--text-muted); }
 
@@ -230,6 +230,41 @@ async function loadInstalled() {
     }
 }
 
+function getProposal(f) {
+    // Critical/high code injection or command execution → must fix
+    if (['critical','high'].includes(f.severity) && ['code_injection','command_execution'].includes(f.category))
+        return {label: 'Usuń / Napraw', cls: 'badge-danger'};
+    if (f.severity === 'critical')
+        return {label: 'Napraw', cls: 'badge-danger'};
+    if (f.severity === 'high' && ['deserialization','native_code','data_exfiltration'].includes(f.category))
+        return {label: 'Napraw', cls: 'badge-danger'};
+    if (f.severity === 'high')
+        return {label: 'Zbadaj', cls: 'badge-caution'};
+    if (f.severity === 'medium')
+        return {label: 'Zbadaj', cls: 'badge-caution'};
+    if (f.severity === 'low' && ['telemetry','tracking'].includes(f.category))
+        return {label: 'Zostaw / Usuń', cls: 'badge-safe'};
+    if (f.severity === 'low')
+        return {label: 'Zostaw', cls: 'badge-safe'};
+    return {label: 'Zostaw', cls: 'badge-safe'};
+}
+
+function getSuggestedFix(f) {
+    const fixes = {
+        code_injection: 'Zamień eval()/exec() na ast.literal_eval() lub bezpieczny parser',
+        command_execution: 'Użyj subprocess z listą args zamiast shell=True; ogranicz komendy',
+        deserialization: 'Zamień pickle na json/msgpack; waliduj dane wejściowe',
+        native_code: 'Sprawdź czy ctypes jest niezbędny; rozważ alternatywę w czystym Pythonie',
+        data_exfiltration: 'Zweryfikuj docelowe URL-e; ogranicz dostęp sieciowy',
+        obfuscation: 'Sprawdź czy base64/codec jest używany do ukrywania payloadu',
+        telemetry: 'Opcjonalnie wyłącz telemetrię lub zweryfikuj zbierane dane',
+        network: 'Sprawdź czy połączenia sieciowe są konieczne i bezpieczne',
+        file_access: 'Ogranicz dostęp do plików; użyj Path z walidacją ścieżek',
+        credential: 'Przenieś sekrety do zmiennych środowiskowych lub vault',
+    };
+    return fixes[f.category] || 'Przejrzyj kod manualnie i oceń ryzyko';
+}
+
 async function showReport(id) {
     const resp = await fetch(BASE + '/api/report/' + id);
     const r = await resp.json();
@@ -239,10 +274,20 @@ async function showReport(id) {
     const sevOrder = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
     r.findings.sort((a, b) => (sevOrder[a.severity] ?? 5) - (sevOrder[b.severity] ?? 5));
     r.findings.forEach(f => {
+        const proposal = getProposal(f);
+        const fix = getSuggestedFix(f);
         html += `<div class="finding finding-${f.severity}">
-            <span class="sev">${f.severity}</span> [${f.category}]
-            <div class="desc">${f.description}</div>
-            <div class="meta">${f.file}${f.line ? ':' + f.line : ''} ${f.code ? '— <code>' + f.code.substring(0,80) + '</code>' : ''}</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                <div style="flex:1">
+                    <span class="sev">${f.severity}</span> [${f.category}]
+                    <div class="desc">${f.description}</div>
+                    <div class="meta">${f.file}${f.line ? ':' + f.line : ''} ${f.code ? '— <code>' + f.code.substring(0,80) + '</code>' : ''}</div>
+                </div>
+                <div style="min-width:220px;font-size:0.85em">
+                    <div><strong>Propozycja:</strong> <span class="badge ${proposal.cls}" style="font-size:0.9em">${proposal.label}</span></div>
+                    <div style="margin-top:4px;color:var(--text-muted)"><strong>Naprawa:</strong> ${fix}</div>
+                </div>
+            </div>
         </div>`;
     });
     document.getElementById('modal-body').innerHTML = html;
