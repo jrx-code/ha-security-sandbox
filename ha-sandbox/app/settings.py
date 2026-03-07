@@ -25,6 +25,7 @@ DEFAULTS = {
     "mqtt_user": "",
     "mqtt_pass": "",
     "mqtt_tls": True,
+    "mqtt_tls_verify": True,
     "max_code_context": 15000,
     "ai_timeout": 300,
     "max_file_size_kb": 500,
@@ -99,6 +100,7 @@ def _apply_to_runtime(data: dict) -> None:
     if data.get("mqtt_pass"):
         cfg.mqtt_pass = data["mqtt_pass"]
     cfg.mqtt_use_tls = data.get("mqtt_tls", cfg.mqtt_use_tls)
+    cfg.mqtt_tls_verify = data.get("mqtt_tls_verify", cfg.mqtt_tls_verify)
     cfg.max_file_size_kb = int(data.get("max_file_size_kb", cfg.max_file_size_kb))
     cfg.scan_timeout_seconds = int(data.get("ai_timeout", cfg.scan_timeout_seconds))
 

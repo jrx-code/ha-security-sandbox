@@ -1,5 +1,5 @@
 name: "HA Security Sandbox"
-version: "0.5.1"
+version: "0.6.0"
 slug: ha_security_sandbox
 description: "Security scanner for Home Assistant custom components — static analysis + AI review"
 url: "https://gitlab.iwanus.eu/jiwanus/ha-sandbox"
