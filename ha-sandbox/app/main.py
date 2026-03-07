@@ -67,10 +67,7 @@ async def _run_scan_background(repo_url: str, name: str):
     _active_jobs[job_id] = {"status": "running", "name": name, "url": repo_url}
     try:
         job = await run_scan(repo_url, name)
-        _active_jobs[job_id] = {
-            "status": job.status.value, "name": job.name,
-            "score": job.ai_score, "findings": len(job.findings),
-        }
+        _active_jobs.pop(job_id, None)
     except Exception as e:
         _active_jobs[job_id] = {"status": "failed", "error": str(e)}
 
@@ -79,7 +76,7 @@ async def _run_scan_background(repo_url: str, name: str):
 
 def _ctx(request: Request, extra: dict | None = None) -> dict:
     """Build template context with ingress base path."""
-    ctx = {"request": request, "base": getattr(request.state, "ingress_path", "")}
+    ctx = {"request": request, "base": getattr(request.state, "ingress_path", ""), "version": __version__}
     if extra:
         ctx.update(extra)
     return ctx

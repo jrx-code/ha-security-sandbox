@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.1] - 2026-03-07
+
+### Fixed
+- Active scans no longer stay visible after completion
+- Failed scans show red badge instead of spinner
+
+### Added
+- Version tag visible in UI header (both pages)
+- Findings sorted by severity in report details (critical → info)
+
 ## [0.5.0] - 2026-03-07
 
 ### Changed
