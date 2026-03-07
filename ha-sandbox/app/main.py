@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app import settings as app_settings
+from app import storage
 from app.ai.ollama import list_ollama_models, test_ollama, test_public_api
 from app.report.generator import load_all_reports
 from app.report.mqtt import disconnect, publish_discovery, publish_status
@@ -19,8 +20,6 @@ from app.scanner.pipeline import run_scan
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
-
-_active_jobs: dict[str, dict] = {}
 
 
 def _read_version() -> str:
@@ -40,12 +39,15 @@ __version__ = _read_version()
 async def lifespan(app: FastAPI):
     log.info("HA Sandbox Analyzer v%s starting", __version__)
     app_settings.init_from_env()
+    storage.init()
+    storage.cleanup_old()
     try:
         publish_discovery()
         publish_status("idle")
     except Exception as e:
         log.warning("MQTT init failed (non-fatal): %s", e)
     yield
+    storage.close()
     disconnect()
 
 
@@ -64,12 +66,12 @@ async def ingress_middleware(request: Request, call_next):
 
 async def _run_scan_background(repo_url: str, name: str):
     job_id = f"{name or repo_url}"
-    _active_jobs[job_id] = {"status": "running", "name": name, "url": repo_url}
+    storage.create_job(job_id, name, repo_url)
     try:
         job = await run_scan(repo_url, name)
-        _active_jobs.pop(job_id, None)
+        storage.complete_job(job_id)
     except Exception as e:
-        _active_jobs[job_id] = {"status": "failed", "error": str(e)}
+        storage.fail_job(job_id, str(e))
 
 
 # --- Pages ---
@@ -86,7 +88,7 @@ def _ctx(request: Request, extra: dict | None = None) -> dict:
 async def index(request: Request):
     reports = load_all_reports()
     return templates.TemplateResponse("index.html", _ctx(request, {
-        "reports": reports, "active_jobs": _active_jobs,
+        "reports": reports, "active_jobs": storage.get_active_jobs(),
     }))
 
 
@@ -139,7 +141,7 @@ async def api_report(report_id: str):
 
 @app.get("/api/status")
 async def api_status():
-    return JSONResponse(content={"active_jobs": _active_jobs})
+    return JSONResponse(content={"active_jobs": storage.get_active_jobs()})
 
 
 # --- Settings API ---

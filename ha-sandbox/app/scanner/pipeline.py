@@ -8,6 +8,8 @@ from app.models import ComponentType, ScanJob, ScanStatus
 from app.scanner.fetch import fetch_and_parse
 from app.scanner.static_js import scan_js_repo
 from app.scanner.static_python import scan_python_repo
+from app.scanner.static_yaml import scan_yaml_repo
+from app.scanner.cve_lookup import check_cve
 from app.ai.ollama import ai_review
 from app.report.generator import generate_report
 from app.report.mqtt import publish_scan_result, publish_status
@@ -31,6 +33,14 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         log.info("[%s] Phase 1 done: type=%s, name=%s", job.id,
                  job.manifest.component_type.value if job.manifest else "?", job.name)
 
+        # Phase 1b: CVE lookup for dependencies
+        if job.manifest and job.manifest.requirements:
+            log.info("[%s] Phase 1b: CVE lookup for %d dependencies", job.id, len(job.manifest.requirements))
+            cve_findings = await check_cve(job.manifest)
+            if cve_findings:
+                log.info("[%s] CVE lookup: %d vulnerabilities found", job.id, len(cve_findings))
+                job.findings.extend(cve_findings)
+
         # Phase 2: Static analysis
         job.status = ScanStatus.SCANNING
         log.info("[%s] Phase 2: static analysis", job.id)
@@ -45,6 +55,12 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
             js_findings = scan_js_repo(repo_path)
             log.info("[%s] JS scanner: %d findings", job.id, len(js_findings))
             job.findings.extend(js_findings)
+
+        # YAML/Jinja2 scan (all component types)
+        yaml_findings = scan_yaml_repo(repo_path)
+        if yaml_findings:
+            log.info("[%s] YAML scanner: %d findings", job.id, len(yaml_findings))
+            job.findings.extend(yaml_findings)
 
         # Phase 4: AI review
         job.status = ScanStatus.AI_REVIEW

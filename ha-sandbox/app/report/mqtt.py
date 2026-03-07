@@ -26,8 +26,11 @@ def _get_client() -> mqtt.Client:
     )
     _client.username_pw_set(settings.mqtt_user, settings.mqtt_pass)
     if settings.mqtt_use_tls:
-        _client.tls_set(cert_reqs=ssl.CERT_NONE)
-        _client.tls_insecure_set(True)
+        if settings.mqtt_tls_verify:
+            _client.tls_set()
+        else:
+            _client.tls_set(cert_reqs=ssl.CERT_NONE)
+            _client.tls_insecure_set(True)
     _client.connect(settings.mqtt_host, settings.mqtt_port)
     _client.loop_start()
     return _client
@@ -73,6 +76,8 @@ def publish_discovery():
 
 def publish_scan_result(job: ScanJob):
     """Publish scan result to MQTT."""
+    from app.storage import get_scans_total
+
     client = _get_client()
     node = settings.mqtt_node_id
 
@@ -80,6 +85,7 @@ def publish_scan_result(job: ScanJob):
     client.publish(f"{node}/last_scan", job.name, retain=True)
     score = str(job.ai_score) if job.ai_score is not None else "N/A"
     client.publish(f"{node}/last_score", score, retain=True)
+    client.publish(f"{node}/scans_total", str(get_scans_total()), retain=True)
 
 
 def publish_status(status: str):
@@ -110,8 +116,11 @@ def test_mqtt_connection(host: str, port: int, user: str, password: str, use_tls
         )
         test_client.username_pw_set(user, password)
         if use_tls:
-            test_client.tls_set(cert_reqs=ssl.CERT_NONE)
-            test_client.tls_insecure_set(True)
+            if settings.mqtt_tls_verify:
+                test_client.tls_set()
+            else:
+                test_client.tls_set(cert_reqs=ssl.CERT_NONE)
+                test_client.tls_insecure_set(True)
         test_client.connect(host, port, keepalive=5)
         test_client.loop_start()
         time.sleep(2)

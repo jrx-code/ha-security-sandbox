@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     mqtt_user: str = ""
     mqtt_pass: str = ""
     mqtt_use_tls: bool = True
+    mqtt_tls_verify: bool = True
     mqtt_enabled: bool = True
     mqtt_node_id: str = "ha_sandbox"
 

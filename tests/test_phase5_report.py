@@ -156,7 +156,7 @@ class TestMQTTDiscovery:
              patch("app.report.mqtt._get_client", return_value=mock_client):
             publish_scan_result(job)
 
-        assert mock_client.publish.call_count == 3  # status, last_scan, last_score
+        assert mock_client.publish.call_count == 4  # status, last_scan, last_score, scans_total
 
     def test_publish_status(self):
         from app.report.mqtt import publish_status

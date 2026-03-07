@@ -15,15 +15,22 @@ os.environ.setdefault("SANDBOX_REPORTS_DIR", "/tmp/ha-sandbox-test/reports")
 
 @pytest.fixture(autouse=True)
 def _test_dirs(tmp_path):
-    """Provide isolated temp dirs for repos/reports and patch settings."""
+    """Provide isolated temp dirs for repos/reports and patch settings + storage."""
     repos = tmp_path / "repos"
     reports = tmp_path / "reports"
     repos.mkdir()
     reports.mkdir()
 
+    from app import storage
+    db_path = tmp_path / "test.db"
+
     with patch("app.config.settings.repos_dir", str(repos)), \
-         patch("app.config.settings.reports_dir", str(reports)):
+         patch("app.config.settings.reports_dir", str(reports)), \
+         patch.object(storage, "DB_PATH", db_path):
+        storage._conn = None
+        storage.init()
         yield {"repos": repos, "reports": reports}
+        storage.close()
 
 
 @pytest.fixture
