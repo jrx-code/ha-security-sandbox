@@ -87,7 +87,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>HA Sandbox Analyzer</h1>
+    <h1>HA Sandbox Analyzer <span style="font-size:0.45em;background:var(--primary);padding:2px 8px;border-radius:6px;vertical-align:middle;color:var(--text-muted)">v{{ version }}</span></h1>
     <h2>Security scanner for Home Assistant custom components</h2>
 
     <div class="tabs">
@@ -130,7 +130,11 @@
             {% for name, info in active_jobs.items() %}
             <div class="installed-item">
                 <span class="installed-name">{{ name }}</span>
+                {% if info.get('status') == 'failed' %}
+                <span class="badge badge-danger">failed</span>
+                {% else %}
                 <span class="badge badge-running"><span class="spinner"></span> {{ info.get('status', 'running') }}</span>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -232,6 +236,8 @@ async function showReport(id) {
     document.getElementById('modal-title').textContent = r.name + ' — Score: ' + (r.ai_score || 'N/A') + '/10';
     let html = '<p style="margin-bottom:12px">' + (r.ai_summary || 'No AI summary') + '</p>';
     html += '<h4 style="margin:12px 0 8px">Findings (' + r.findings.length + ')</h4>';
+    const sevOrder = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
+    r.findings.sort((a, b) => (sevOrder[a.severity] ?? 5) - (sevOrder[b.severity] ?? 5));
     r.findings.forEach(f => {
         html += `<div class="finding finding-${f.severity}">
             <span class="sev">${f.severity}</span> [${f.category}]
@@ -254,13 +260,15 @@ function closeModal() { document.getElementById('modal').classList.remove('open'
 document.getElementById('modal').addEventListener('click', e => { if (e.target.classList.contains('modal-bg')) closeModal(); });
 
 // Auto-refresh active scans
+let _hadRunning = {{ 'true' if active_jobs else 'false' }};
 setInterval(async () => {
     const resp = await fetch(BASE + '/api/status');
     const data = await resp.json();
-    const running = Object.values(data.active_jobs).some(j => j.status === 'running');
-    if (running) {
-        // Show subtle indicator
-    } else if (Object.keys(data.active_jobs).length > 0) {
+    const hasRunning = Object.values(data.active_jobs).some(j => j.status === 'running');
+    if (hasRunning) {
+        _hadRunning = true;
+    } else if (_hadRunning) {
+        _hadRunning = false;
         if (!location.hash) location.hash = 'results';
         location.reload();
     }
