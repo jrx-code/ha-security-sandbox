@@ -1,5 +1,5 @@
 build_from:
-  amd64: ghcr.io/home-assistant/amd64-base-python:3.13
-  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.13
+  amd64: ghcr.io/home-assistant/amd64-base-python:3.13-alpine3.21
+  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.13-alpine3.21
 args:
   BUILD_VERSION: "0.5.1"

@@ -47,7 +47,7 @@ build:
     - echo "Building ${IMAGE_NAME}:${VERSION}"
     - >-
       docker build
-      --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.13
+      --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.13-alpine3.21
       -t ${IMAGE_NAME}:${VERSION}
       -t ${IMAGE_NAME}:latest
       ha-sandbox/
