@@ -2,7 +2,7 @@
 #
 # Branch workflow:
 #   main     → lint + test (clean code gate)
-#   publish  → lint + test + security + build + deploy + github mirror
+#   publish  → lint + test + security + build + deploy + wiki + github mirror
 #
 # Local command: make publish (orchestrates the full chain)
 
@@ -12,6 +12,7 @@ stages:
   - security
   - build
   - deploy
+  - wiki
   - mirror
 
 variables:
@@ -128,6 +129,18 @@ deploy:
   environment:
     name: staging
     url: http://192.168.19.250:8099
+
+# ===== STAGE: WIKI UPDATE (publish only) =====================================
+wiki-update:
+  stage: wiki
+  before_script:
+    - chmod 666 /var/run/docker.sock 2>/dev/null || true
+    - docker version --format '{{.Client.Version}}' || apk add --no-cache docker-cli
+  script:
+    - python3 scripts/update-wiki.py
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "publish"
 
 # ===== STAGE: GITHUB MIRROR (publish only) ==================================
 github-mirror:
