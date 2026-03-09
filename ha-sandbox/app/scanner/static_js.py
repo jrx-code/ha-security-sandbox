@@ -310,6 +310,78 @@ def _scan_js_regex(source: str, filepath: str) -> list[Finding]:
 # Public API
 # ──────────────────────────────────────────────────────────────────────
 
+_OBFUSCATION_PATTERNS: list[tuple[str, str]] = [
+    (r'_0x[0-9a-f]{4,}\s*[\(\[=]', "Hex-prefixed variable names (_0x pattern)"),
+    (r'function\s+_0x[0-9a-f]{4,}', "Obfuscated function definitions (_0x pattern)"),
+    (r"\['push'\]\s*\(\s*\w+\s*\[\s*'shift'\s*\]", "String array rotation (anti-analysis)"),
+    (r'parseInt\s*\([^)]+\)\s*/\s*\d+\s*\*\s*\(\s*-?\s*parseInt', "Control flow flattening (parseInt shuffle)"),
+]
+
+_COMPILED_OBFUSCATION = [(re.compile(p), d) for p, d in _OBFUSCATION_PATTERNS]
+
+
+def _detect_obfuscation(source: str, filepath: str) -> list[Finding]:
+    """Detect deliberate code obfuscation — a major red flag in open-source HA components.
+
+    Minification (short var names, no whitespace) is normal for production JS bundles.
+    Obfuscation (hex-encoded names, string rotation, control flow flattening) is not —
+    it actively hides what the code does, which is incompatible with open-source trust.
+    """
+    findings: list[Finding] = []
+    # Count _0x references as a heuristic — minified code doesn't use this pattern
+    hex_vars = len(re.findall(r'_0x[0-9a-f]{4,}', source))
+    if hex_vars < 5:
+        return findings
+
+    # This is obfuscated code — report the main finding
+    matched_techniques = []
+    for regex, desc in _COMPILED_OBFUSCATION:
+        if regex.search(source):
+            matched_techniques.append(desc)
+
+    techniques = "; ".join(matched_techniques) if matched_techniques else "Hex-encoded variable names"
+    findings.append(Finding(
+        severity=Severity.HIGH,
+        category="obfuscation",
+        file=filepath,
+        line=1,
+        code=source[:120].strip(),
+        description=(
+            f"Deliberately obfuscated code ({hex_vars} hex-encoded references). "
+            f"Techniques: {techniques}. "
+            "Obfuscation in open-source HA components hides intent and prevents security review — "
+            "this code cannot be trusted without deobfuscation."
+        ),
+    ))
+
+    # Check for external URLs hidden in the obfuscated code
+    urls = re.findall(r'https?://[^\s\'"\\]{10,}', source)
+    external_urls = [u for u in urls if not any(safe in u for safe in
+                     ["github.com", "githubusercontent.com", "home-assistant.io",
+                      "hacs.xyz", "jsdelivr.net", "unpkg.com"])]
+    if external_urls:
+        unique_domains = set()
+        for u in external_urls[:20]:
+            try:
+                domain = u.split("//")[1].split("/")[0]
+                unique_domains.add(domain)
+            except IndexError:
+                pass
+        if unique_domains:
+            findings.append(Finding(
+                severity=Severity.HIGH,
+                category="data_exfiltration",
+                file=filepath,
+                line=1,
+                description=(
+                    f"External URLs found in obfuscated code: {', '.join(sorted(unique_domains)[:10])}. "
+                    "Hidden network calls in obfuscated code may exfiltrate data."
+                ),
+            ))
+
+    return findings
+
+
 def scan_js_file(filepath: Path) -> list[Finding]:
     """Scan a single JS/TS file — AST primary, regex fallback."""
     findings: list[Finding] = []
@@ -325,6 +397,11 @@ def scan_js_file(filepath: Path) -> list[Finding]:
             file=str(filepath),
             description=f"Large file ({len(source) // 1024}KB), may be bundled/minified",
         ))
+
+    # Check for deliberate obfuscation before detailed analysis
+    obf_findings = _detect_obfuscation(source, str(filepath))
+    if obf_findings:
+        findings.extend(obf_findings)
 
     # Try AST first
     ast_findings = _scan_js_ast(source, str(filepath))
