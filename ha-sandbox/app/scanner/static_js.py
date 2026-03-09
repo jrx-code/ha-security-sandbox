@@ -266,7 +266,7 @@ def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
 
 JS_PATTERNS: list[tuple[str, Severity, str, str]] = [
     (r'\beval\s*\(', Severity.CRITICAL, "code_injection", "eval() can execute arbitrary code"),
-    (r'\bFunction\s*\(', Severity.CRITICAL, "code_injection", "Function() constructor creates executable code"),
+    # Function() constructor handled separately (case-sensitive) below
     (r'setTimeout\s*\(\s*["\']', Severity.HIGH, "code_injection", "setTimeout with string argument acts as eval"),
     (r'setInterval\s*\(\s*["\']', Severity.HIGH, "code_injection", "setInterval with string argument acts as eval"),
     (r'\.innerHTML\s*=', Severity.MEDIUM, "xss", "innerHTML assignment can introduce XSS"),
@@ -295,12 +295,18 @@ JS_PATTERNS: list[tuple[str, Severity, str, str]] = [
 _COMPILED = [(re.compile(pat, re.IGNORECASE), sev, cat, desc)
              for pat, sev, cat, desc in JS_PATTERNS]
 
+# Case-sensitive patterns (Function vs function distinction matters)
+_COMPILED_CASE_SENSITIVE = [
+    (re.compile(r'(?:^|[^a-z])Function\s*\('), Severity.CRITICAL, "code_injection",
+     "Function() constructor creates executable code"),
+]
+
 
 def _scan_js_regex(source: str, filepath: str) -> list[Finding]:
     """Regex-based scan — fallback when AST parsing fails."""
     findings = []
     lines = source.splitlines()
-    for regex, sev, cat, desc in _COMPILED:
+    for regex, sev, cat, desc in _COMPILED + _COMPILED_CASE_SENSITIVE:
         for i, line in enumerate(lines, 1):
             if regex.search(line):
                 findings.append(Finding(
