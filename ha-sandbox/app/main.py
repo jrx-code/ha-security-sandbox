@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -64,14 +65,26 @@ async def ingress_middleware(request: Request, call_next):
     return response
 
 
-async def _run_scan_background(repo_url: str, name: str):
+async def _run_scan_background(repo_url: str, name: str, batch_id: str = ""):
     job_id = f"{name or repo_url}"
-    storage.create_job(job_id, name, repo_url)
+    storage.create_job(job_id, name, repo_url, batch_id=batch_id)
     try:
         job = await run_scan(repo_url, name)
         storage.complete_job(job_id)
+        if batch_id:
+            storage.batch_job_done(batch_id, success=True)
     except Exception as e:
         storage.fail_job(job_id, str(e))
+        if batch_id:
+            storage.batch_job_done(batch_id, success=False)
+
+
+async def _run_batch_background(batch_id: str, repos: list[dict]):
+    """Process a batch of repos sequentially."""
+    for item in repos:
+        url = item["url"]
+        name = item.get("name", "")
+        await _run_scan_background(url, name, batch_id=batch_id)
 
 
 # --- Pages ---
@@ -220,6 +233,61 @@ async def api_clear_reports():
         shutil.rmtree(reports_dir)
         reports_dir.mkdir(parents=True)
     return JSONResponse(content={"ok": True})
+
+
+@app.post("/api/scan/batch")
+async def api_scan_batch(request: Request, background_tasks: BackgroundTasks):
+    """Start a batch scan of multiple repos.
+
+    Body: {"repos": [{"url": "...", "name": "..."}, ...]}
+    Returns: {"batch_id": "...", "total": N}
+    """
+    data = await request.json()
+    repos = data.get("repos", [])
+    if not repos:
+        return JSONResponse(content={"error": "No repos provided"}, status_code=400)
+
+    # Normalize URLs
+    for item in repos:
+        url = item.get("url", "")
+        if not url.startswith("http"):
+            item["url"] = f"https://github.com/{url}.git"
+
+    batch_id = uuid.uuid4().hex[:12]
+    storage.create_batch(batch_id, len(repos))
+    background_tasks.add_task(_run_batch_background, batch_id, repos)
+    return JSONResponse(content={"batch_id": batch_id, "total": len(repos)})
+
+
+@app.get("/api/scan/batch/{batch_id}")
+async def api_batch_status(batch_id: str):
+    """Get batch scan progress."""
+    batch = storage.get_batch(batch_id)
+    if not batch:
+        return JSONResponse(content={"error": "Batch not found"}, status_code=404)
+    return JSONResponse(content=batch)
+
+
+@app.post("/api/scan/installed")
+async def api_scan_installed(request: Request, background_tasks: BackgroundTasks):
+    """Scan all installed HACS components (batch mode)."""
+    installed = await fetch_installed_hacs()
+    if not installed:
+        return JSONResponse(content={"error": "No HACS components found or HA unreachable"}, status_code=404)
+
+    repos = []
+    for comp in installed:
+        url = repo_to_url(comp.get("full_name", ""))
+        if url:
+            repos.append({"url": url, "name": comp.get("name", comp.get("full_name", ""))})
+
+    if not repos:
+        return JSONResponse(content={"error": "No scannable repos found"}, status_code=404)
+
+    batch_id = uuid.uuid4().hex[:12]
+    storage.create_batch(batch_id, len(repos))
+    background_tasks.add_task(_run_batch_background, batch_id, repos)
+    return JSONResponse(content={"batch_id": batch_id, "total": len(repos)})
 
 
 @app.get("/api/system")
