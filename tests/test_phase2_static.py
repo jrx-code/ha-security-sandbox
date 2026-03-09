@@ -91,6 +91,132 @@ class TestPythonScanner:
         assert not any(".venv" in f.file for f in findings)
 
 
+class TestPythonTaintFlow:
+    """Tests for Python data flow / taint tracking analysis."""
+
+    def test_config_entry_to_eval(self, tmp_path):
+        """config_entry.data flowing into eval() should be CRITICAL."""
+        f = tmp_path / "taint.py"
+        f.write_text(
+            'def setup(hass, config_entry):\n'
+            '    cmd = config_entry.data["command"]\n'
+            '    result = eval(cmd)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_code_injection" and f.severity == Severity.CRITICAL
+                   for f in findings)
+
+    def test_config_entry_to_subprocess_shell(self, tmp_path):
+        """config_entry.data flowing to subprocess.run(shell=True) = CRITICAL."""
+        f = tmp_path / "taint_cmd.py"
+        f.write_text(
+            'import subprocess\n'
+            'def run_cmd(config_entry):\n'
+            '    cmd = config_entry.data.get("cmd")\n'
+            '    subprocess.run(cmd, shell=True)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_command_injection" and f.severity == Severity.CRITICAL
+                   for f in findings)
+
+    def test_config_entry_to_subprocess_no_shell(self, tmp_path):
+        """config_entry.data to subprocess.run() without shell=True = HIGH."""
+        f = tmp_path / "taint_cmd2.py"
+        f.write_text(
+            'import subprocess\n'
+            'def run_cmd(entry):\n'
+            '    cmd = entry.data["cmd"]\n'
+            '    subprocess.run(cmd)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_command_injection" and f.severity == Severity.HIGH
+                   for f in findings)
+
+    def test_tainted_fstring_to_system(self, tmp_path):
+        """Tainted var in f-string passed to os.system()."""
+        f = tmp_path / "taint_fstr.py"
+        f.write_text(
+            'import os\n'
+            'def do_thing(config_entry):\n'
+            '    host = config_entry.data["host"]\n'
+            '    cmd = f"ping {host}"\n'
+            '    os.system(cmd)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_command_injection" for f in findings)
+
+    def test_tainted_path_traversal(self, tmp_path):
+        """User input in open() = path traversal risk."""
+        f = tmp_path / "taint_path.py"
+        f.write_text(
+            'def read_file(config_entry):\n'
+            '    path = config_entry.data["file_path"]\n'
+            '    with open(path) as fh:\n'
+            '        return fh.read()\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_path_traversal" for f in findings)
+
+    def test_safe_code_no_taint(self, tmp_path):
+        """Code using only literals should not produce taint findings."""
+        f = tmp_path / "safe.py"
+        f.write_text(
+            'import subprocess\n'
+            'def safe_func():\n'
+            '    subprocess.run(["ls", "-la"])\n'
+        )
+        findings = scan_python_file(f)
+        taint_findings = [f for f in findings if f.category.startswith("taint_")]
+        assert len(taint_findings) == 0
+
+    def test_taint_overwritten_is_safe(self, tmp_path):
+        """If tainted var is overwritten with a safe value, it should not trigger."""
+        f = tmp_path / "overwrite.py"
+        f.write_text(
+            'def func(config_entry):\n'
+            '    cmd = config_entry.data["x"]\n'
+            '    cmd = "safe_value"\n'
+            '    eval(cmd)\n'
+        )
+        findings = scan_python_file(f)
+        taint_findings = [f for f in findings if f.category.startswith("taint_")]
+        assert len(taint_findings) == 0
+
+    def test_hass_data_is_tainted(self, tmp_path):
+        """hass.data[DOMAIN] should be treated as potentially tainted."""
+        f = tmp_path / "hass_data.py"
+        f.write_text(
+            'def setup(hass):\n'
+            '    stored = hass.data["my_domain"]\n'
+            '    eval(stored)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_code_injection" for f in findings)
+
+    def test_request_json_to_exec(self, tmp_path):
+        """request.json flowing to exec() — web handler injection."""
+        f = tmp_path / "web_handler.py"
+        f.write_text(
+            'async def handle_post(request):\n'
+            '    data = request.json\n'
+            '    exec(data)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_code_injection" for f in findings)
+
+    def test_pickle_loads_tainted(self, tmp_path):
+        """pickle.loads() with tainted data = deserialization attack."""
+        f = tmp_path / "deser.py"
+        f.write_text(
+            'import pickle\n'
+            'def load_data(config_entry):\n'
+            '    raw = config_entry.data["payload"]\n'
+            '    obj = pickle.loads(raw)\n'
+        )
+        findings = scan_python_file(f)
+        assert any(f.category == "taint_deserialization" for f in findings)
+
+
 class TestJSScanner:
     def test_dangerous_file(self, fixture_dangerous_js):
         js_file = fixture_dangerous_js / "evil-card.js"
