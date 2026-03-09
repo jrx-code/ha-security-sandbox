@@ -4,7 +4,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from app.models import ComponentType, ScanJob, ScanStatus
+from app.models import ComponentType, Finding, ScanJob, ScanStatus, Severity
 from app.scanner.fetch import fetch_and_parse
 from app.scanner.static_js import scan_js_repo
 from app.scanner.static_python import scan_python_repo
@@ -16,6 +16,88 @@ from app.report.generator import generate_report
 from app.report.mqtt import publish_scan_result, publish_status
 
 log = logging.getLogger(__name__)
+
+# Severity rank for keeping the highest severity on merge
+_SEV_RANK = {Severity.CRITICAL: 4, Severity.HIGH: 3, Severity.MEDIUM: 2, Severity.LOW: 1, Severity.INFO: 0}
+
+# Category aliases — different scanners may use different names for the same issue
+_CATEGORY_ALIASES: dict[str, str] = {
+    "taint_code_injection": "code_injection",
+    "taint_command_injection": "command_execution",
+    "taint_deserialization": "deserialization",
+    "taint_path_traversal": "path_traversal",
+    "ha_dynamic_service": "ha_api_risk",
+    "script_injection": "xss",
+}
+
+
+def _normalize_category(cat: str) -> str:
+    """Normalize category name for dedup comparison."""
+    return _CATEGORY_ALIASES.get(cat, cat)
+
+
+def _dedup_key(f: Finding) -> str:
+    """Generate a dedup key from a finding. Same file+category+line = duplicate."""
+    norm_cat = _normalize_category(f.category)
+    # For AI findings without line numbers, use file+category only
+    if f.line:
+        return f"{f.file}:{f.line}:{norm_cat}"
+    return f"{f.file}::{norm_cat}"
+
+
+def deduplicate_findings(findings: list[Finding]) -> list[Finding]:
+    """Merge duplicate findings, keeping the highest severity and best description.
+
+    Two findings are considered duplicates if they have the same file, line
+    (or both lack a line), and normalized category. When merged, the higher
+    severity is kept and descriptions are combined if meaningfully different.
+    """
+    by_key: dict[str, Finding] = {}
+
+    for f in findings:
+        key = _dedup_key(f)
+        if key not in by_key:
+            by_key[key] = f
+            continue
+
+        existing = by_key[key]
+        # Keep higher severity
+        if _SEV_RANK.get(f.severity, 0) > _SEV_RANK.get(existing.severity, 0):
+            merged = Finding(
+                severity=f.severity,
+                category=f.category,
+                file=f.file,
+                line=f.line or existing.line,
+                code=f.code or existing.code,
+                description=f.description,
+            )
+        else:
+            merged = Finding(
+                severity=existing.severity,
+                category=existing.category,
+                file=existing.file,
+                line=existing.line or f.line,
+                code=existing.code or f.code,
+                description=existing.description,
+            )
+
+        # Append AI insight if different and meaningful
+        other_desc = f.description if merged.description == existing.description else existing.description
+        if other_desc and other_desc != merged.description:
+            # Only append if substantively different (not just a prefix)
+            if not merged.description.startswith(other_desc[:30]) and not other_desc.startswith(merged.description[:30]):
+                merged = Finding(
+                    severity=merged.severity,
+                    category=merged.category,
+                    file=merged.file,
+                    line=merged.line,
+                    code=merged.code,
+                    description=f"{merged.description} | {other_desc}",
+                )
+
+        by_key[key] = merged
+
+    return list(by_key.values())
 
 
 async def run_scan(repo_url: str, name: str = "") -> ScanJob:
@@ -76,6 +158,12 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         publish_status(f"ai_review:{job.name}")
         await ai_review(job, repo_path)
         log.info("[%s] Phase 4 done: score=%s", job.id, job.ai_score)
+
+        # Deduplication: merge static + AI findings
+        before_dedup = len(job.findings)
+        job.findings = deduplicate_findings(job.findings)
+        if before_dedup != len(job.findings):
+            log.info("[%s] Dedup: %d → %d findings", job.id, before_dedup, len(job.findings))
 
         # Phase 5: Report
         job.status = ScanStatus.DONE
