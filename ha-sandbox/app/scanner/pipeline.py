@@ -181,10 +181,19 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         # Learning phase (L.1, L.2, L.4)
         domain = job.manifest.domain if job.manifest else ""
         version = job.manifest.version if job.manifest else ""
+        learning_data: dict = {}
         try:
             # L.1: Extract and store fingerprint
             fp = extract_fingerprint(repo_path, domain=domain, repo_url=job.repo_url)
             storage.save_fingerprint(job.id, fp)
+            learning_data["fingerprint"] = {
+                "total_lines": fp.get("total_lines", 0),
+                "py_files": fp.get("py_files", 0),
+                "js_files": fp.get("js_files", 0),
+                "network_domains": fp.get("network_domains", []),
+                "imports_count": len(fp.get("imports", [])),
+                "ha_apis_count": len(fp.get("ha_apis", [])),
+            }
 
             # Check for fingerprint changes vs previous scan
             prev_fp = storage.get_last_fingerprint(domain=domain, repo_url=job.repo_url)
@@ -192,6 +201,7 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
                 changes = fingerprint_diff(prev_fp, fp)
                 if changes:
                     log.info("[%s] Fingerprint changed: %s", job.id, changes)
+                    learning_data["fingerprint_changes"] = changes
 
             # L.2: Check deviations from baseline
             conn = storage.get_conn()
@@ -199,6 +209,7 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
             if deviations:
                 log.info("[%s] Baseline deviations: %s", job.id,
                          [f"{d['label']} ({d['direction']} by {d['z_score']}σ)" for d in deviations])
+                learning_data["deviations"] = deviations
 
             # L.4: Record in scan history for reputation tracking
             record_scan(conn, domain, job.repo_url, version,
@@ -216,7 +227,7 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
 
         # Phase 5: Report
         job.status = ScanStatus.DONE
-        report_path = generate_report(job)
+        report_path = generate_report(job, learning_data=learning_data or None)
         publish_scan_result(job)
         log.info("[%s] Done: %d findings, score=%s", job.id, len(job.findings), job.ai_score)
 

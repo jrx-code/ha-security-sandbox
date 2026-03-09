@@ -154,7 +154,15 @@
                 <tbody>
                 {% for r in reports %}
                 <tr>
-                    <td><strong>{{ r.name }}</strong></td>
+                    <td>
+                        <strong>{{ r.name }}</strong>
+                        {% if r.learning is defined and r.learning.deviations is defined and r.learning.deviations|length > 0 %}
+                        <span class="badge badge-caution" style="margin-left:6px;font-size:0.7em;vertical-align:middle" title="Odbiega od normy ({{ r.learning.deviations|length }} odchyleń)">Nietypowy</span>
+                        {% endif %}
+                        {% if r.learning is defined and r.learning.fingerprint_changes is defined and r.learning.fingerprint_changes|length > 0 %}
+                        <span style="color:var(--accent);font-size:0.75em;margin-left:4px" title="Wykryto zmiany vs poprzedni skan">&#916;</span>
+                        {% endif %}
+                    </td>
                     <td>{{ r.component_type }}</td>
                     <td>
                         {% if r.score_label == 'SAFE' %}<span class="badge badge-safe">{{ r.ai_score }}/10</span>
@@ -280,6 +288,55 @@ async function showReport(id) {
             </div>`;
         }
     } catch(e) { /* no reputation data yet */ }
+    // L.1: Fingerprint changes vs previous scan
+    if (r.learning && r.learning.fingerprint_changes) {
+        const ch = r.learning.fingerprint_changes;
+        let chHtml = '';
+        for (const [key, val] of Object.entries(ch)) {
+            if (key === 'size') {
+                const color = val.change_pct > 0 ? 'var(--caution)' : 'var(--safe)';
+                chHtml += `<div><strong>Rozmiar kodu:</strong> ${val.old_lines} → ${val.new_lines} linii (<span style="color:${color}">${val.change_pct > 0 ? '+' : ''}${val.change_pct}%</span>)</div>`;
+            } else {
+                const label = {imports: 'Importy', ha_apis: 'API HA', network_domains: 'Domeny sieciowe'}[key] || key;
+                if (val.added && val.added.length) chHtml += `<div><strong>${label}:</strong> <span style="color:var(--safe)">+ ${val.added.join(', ')}</span></div>`;
+                if (val.removed && val.removed.length) chHtml += `<div><strong>${label}:</strong> <span style="color:var(--danger)">− ${val.removed.join(', ')}</span></div>`;
+            }
+        }
+        if (chHtml) {
+            html += `<div style="background:rgba(136,192,208,0.1);border-left:3px solid var(--accent);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:12px;font-size:0.85em">
+                <strong>&#916; Zmiany vs poprzedni skan:</strong>
+                ${chHtml}
+            </div>`;
+        }
+    }
+    // L.2: Baseline deviations
+    if (r.learning && r.learning.deviations && r.learning.deviations.length) {
+        let devHtml = r.learning.deviations.map(d => {
+            const color = d.direction === 'above' ? 'var(--caution)' : 'var(--safe)';
+            const arrow = d.direction === 'above' ? '&#9650;' : '&#9660;';
+            return `<div><span style="color:${color}">${arrow}</span> <strong>${d.label}:</strong> ${d.value} (norma: ${d.mean} ± ${d.stddev}, odchylenie: ${d.z_score}σ)</div>`;
+        }).join('');
+        html += `<div style="background:rgba(235,203,139,0.1);border-left:3px solid var(--caution);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:12px;font-size:0.85em">
+            <strong>&#9888; Odchylenia od normy:</strong>
+            ${devHtml}
+        </div>`;
+    }
+    // L.1: Fingerprint summary
+    if (r.learning && r.learning.fingerprint) {
+        const fp = r.learning.fingerprint;
+        let fpParts = [];
+        if (fp.total_lines) fpParts.push(`${fp.total_lines} linii`);
+        if (fp.py_files) fpParts.push(`${fp.py_files} .py`);
+        if (fp.js_files) fpParts.push(`${fp.js_files} .js`);
+        if (fp.imports_count) fpParts.push(`${fp.imports_count} importów`);
+        if (fp.ha_apis_count) fpParts.push(`${fp.ha_apis_count} API HA`);
+        if (fp.network_domains && fp.network_domains.length) fpParts.push(`${fp.network_domains.length} domen ext.`);
+        if (fpParts.length) {
+            html += `<div style="color:var(--text-muted);font-size:0.8em;margin-bottom:8px">
+                <strong>Fingerprint:</strong> ${fpParts.join(' · ')}${fp.network_domains && fp.network_domains.length ? ' (' + fp.network_domains.join(', ') + ')' : ''}
+            </div>`;
+        }
+    }
     html += '<h4 style="margin:12px 0 8px">Findings (' + r.findings.length + ')</h4>';
     const sevOrder = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
     r.findings.sort((a, b) => (sevOrder[a.severity] ?? 5) - (sevOrder[b.severity] ?? 5));
