@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from app.models import Finding, ManifestInfo, ScanJob, ScanStatus, Severity, ComponentType
-from app.report.generator import generate_report, load_all_reports
+from app.report.generator import generate_report, load_all_reports, load_report, export_csv, export_html
 
 
 def _make_job(**kwargs) -> ScanJob:
@@ -122,6 +122,53 @@ class TestLoadAllReports:
         with patch("app.config.settings.reports_dir", str(tmp_path / "nonexistent")):
             reports = load_all_reports()
         assert reports == []
+
+
+class TestReportExport:
+    def test_export_csv(self, _test_dirs):
+        job = _make_job()
+        generate_report(job)
+        report = load_report("rpt001")
+        csv_data = export_csv(report)
+        assert "severity,category,file,line,description,code" in csv_data
+        assert "high,command_execution,sensor.py,10" in csv_data
+        assert "low,network,api.py,5" in csv_data
+
+    def test_export_csv_empty_findings(self, _test_dirs):
+        job = _make_job(findings=[])
+        generate_report(job)
+        report = load_report("rpt001")
+        csv_data = export_csv(report)
+        lines = csv_data.strip().split("\n")
+        assert len(lines) == 1  # Header only
+
+    def test_export_html(self, _test_dirs):
+        job = _make_job()
+        generate_report(job)
+        report = load_report("rpt001")
+        html = export_html(report)
+        assert "<!DOCTYPE html>" in html
+        assert "Test Component" in html
+        assert "8.5" in html
+        assert "command_execution" in html
+        assert "subprocess" in html
+
+    def test_export_html_no_findings(self, _test_dirs):
+        job = _make_job(findings=[])
+        generate_report(job)
+        report = load_report("rpt001")
+        html = export_html(report)
+        assert "No findings" in html
+
+    def test_load_report(self, _test_dirs):
+        job = _make_job()
+        generate_report(job)
+        report = load_report("rpt001")
+        assert report is not None
+        assert report["id"] == "rpt001"
+
+    def test_load_report_not_found(self, _test_dirs):
+        assert load_report("nonexistent") is None
 
 
 class TestMQTTDiscovery:

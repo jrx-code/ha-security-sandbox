@@ -8,13 +8,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app import settings as app_settings
 from app import storage
 from app.ai.ollama import list_ollama_models, test_ollama, test_public_api
-from app.report.generator import load_all_reports
+from app.report.generator import export_csv, export_html, load_all_reports, load_report
 from app.report.mqtt import disconnect, publish_discovery, publish_status
 from app.scanner.hacs_list import fetch_installed_hacs, repo_to_url, test_ha_connection
 from app.scanner.pipeline import run_scan
@@ -146,10 +146,31 @@ async def api_reports():
 
 @app.get("/api/report/{report_id}")
 async def api_report(report_id: str):
-    for r in load_all_reports():
-        if r.get("id") == report_id:
-            return JSONResponse(content=r)
+    report = load_report(report_id)
+    if report:
+        return JSONResponse(content=report)
     return JSONResponse(content={"error": "not found"}, status_code=404)
+
+
+@app.get("/api/report/{report_id}/csv")
+async def api_report_csv(report_id: str):
+    report = load_report(report_id)
+    if not report:
+        return JSONResponse(content={"error": "not found"}, status_code=404)
+    csv_data = export_csv(report)
+    return Response(
+        content=csv_data, media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{report_id}.csv"'},
+    )
+
+
+@app.get("/api/report/{report_id}/html")
+async def api_report_html(report_id: str):
+    report = load_report(report_id)
+    if not report:
+        return JSONResponse(content={"error": "not found"}, status_code=404)
+    html = export_html(report)
+    return HTMLResponse(content=html)
 
 
 @app.get("/api/status")
