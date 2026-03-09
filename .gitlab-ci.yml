@@ -108,8 +108,8 @@ deploy:
       -e SANDBOX_AI_PROVIDER=ollama
       -e SANDBOX_OLLAMA_URL=http://ollama:11434
       -e SANDBOX_OLLAMA_MODEL=gemma3:12b
-      -e SANDBOX_HA_URL=${SANDBOX_HA_URL:-http://192.168.19.250:8124}
-      -e SANDBOX_MQTT_HOST=mqtt.iwanus.eu
+      -e SANDBOX_HA_URL=${SANDBOX_HA_URL:-${DEPLOY_HA_URL}}
+      -e SANDBOX_MQTT_HOST=${DEPLOY_MQTT_HOST}
       -e SANDBOX_MQTT_PORT=8883
       -e SANDBOX_MQTT_USER=svc_sandbox
       -e SANDBOX_MQTT_TLS=true
@@ -128,7 +128,7 @@ deploy:
     - if: $CI_COMMIT_BRANCH == "publish"
   environment:
     name: staging
-    url: http://192.168.19.250:8099
+    url: ${DEPLOY_URL}
 
 # ===== STAGE: WIKI UPDATE (publish only) =====================================
 wiki-update:
