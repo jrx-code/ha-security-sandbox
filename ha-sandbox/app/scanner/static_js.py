@@ -208,11 +208,6 @@ def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
                     add(Severity.MEDIUM, "xss",
                         "insertAdjacentHTML can introduce XSS", node)
 
-                # appendChild with script context — detected by regex fallback
-                if member[1] == "appendChild":
-                    add(Severity.LOW, "dom_manipulation",
-                        "DOM appendChild — verify no script injection", node)
-
         # --- NewExpression: new WebSocket(), new Image() ---
         elif ntype == "NewExpression":
             callee = node.get("callee", {})
@@ -492,16 +487,52 @@ def scan_js_file(filepath: Path) -> list[Finding]:
     return findings
 
 
+def _cap_findings_per_file(findings: list[Finding], max_per_cat: int = 3) -> list[Finding]:
+    """Cap findings to max_per_cat per category per file to reduce noise."""
+    counts: dict[tuple[str, str], int] = {}
+    capped: list[Finding] = []
+    for f in findings:
+        key = (f.file, f.category)
+        counts[key] = counts.get(key, 0) + 1
+        if counts[key] <= max_per_cat:
+            capped.append(f)
+    return capped
+
+
+# Third-party/vendor files that are not part of the component's own code
+_VENDOR_PATTERNS = {"docsify", "prism", "marked", "highlight", "mermaid"}
+
+
 def scan_js_repo(repo_path: Path) -> list[Finding]:
     """Scan all JS/TS files in a repository."""
     findings = []
+    parse_fail_count = 0
     extensions = {".js", ".ts", ".jsx", ".tsx", ".mjs"}
     for jsfile in repo_path.rglob("*"):
         if jsfile.suffix not in extensions:
             continue
         rel = str(jsfile.relative_to(repo_path))
         if any(skip in rel.split("/") for skip in
-               ["node_modules", ".venv", "__pycache__", "tests"]):
+               ["node_modules", ".venv", "__pycache__", "tests", "docs"]):
             continue
-        findings.extend(scan_js_file(jsfile))
-    return findings
+        # Skip well-known third-party vendor files (e.g. docsify.min.js)
+        stem = jsfile.stem.lower().replace(".min", "")
+        if any(v in stem for v in _VENDOR_PATTERNS):
+            continue
+        file_findings = scan_js_file(jsfile)
+        # Count parse_info separately — aggregate at end
+        file_parse_info = [f for f in file_findings if f.category == "parse_info"]
+        file_other = [f for f in file_findings if f.category != "parse_info"]
+        findings.extend(file_other)
+        parse_fail_count += len(file_parse_info)
+
+    # Aggregate parse_info into a single finding (reduces 400+ to 1)
+    if parse_fail_count > 0:
+        findings.append(Finding(
+            severity=Severity.INFO,
+            category="parse_info",
+            file=str(repo_path),
+            description=f"{parse_fail_count} file(s) used regex fallback (ES2020+ syntax)",
+        ))
+
+    return _cap_findings_per_file(findings)

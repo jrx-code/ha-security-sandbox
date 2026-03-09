@@ -49,6 +49,30 @@ def _dedup_key(f: Finding) -> str:
     return f"{f.file}::{norm_cat}"
 
 
+def _aggregate_info_findings(findings: list[Finding], max_network: int = 5) -> list[Finding]:
+    """Aggregate high-volume INFO findings to reduce noise.
+
+    Network findings (e.g. 'import requests') are capped to max_network
+    per repo, with a summary finding appended when excess are dropped.
+    """
+    network_findings = [f for f in findings if f.category == "network"]
+    other_findings = [f for f in findings if f.category != "network"]
+
+    if len(network_findings) <= max_network:
+        return findings
+
+    # Keep first max_network, aggregate the rest into a summary
+    kept = network_findings[:max_network]
+    dropped = len(network_findings) - max_network
+    kept.append(Finding(
+        severity=Severity.INFO,
+        category="network",
+        file="(aggregated)",
+        description=f"...and {dropped} more network findings (total {len(network_findings)} across repo)",
+    ))
+    return other_findings + kept
+
+
 def deduplicate_findings(findings: list[Finding]) -> list[Finding]:
     """Merge duplicate findings, keeping the highest severity and best description.
 
@@ -155,6 +179,12 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
             if ha_findings:
                 log.info("[%s] HA API scanner: %d findings", job.id, len(ha_findings))
                 job.findings.extend(ha_findings)
+
+        # Aggregate high-volume info findings before AI review
+        before_agg = len(job.findings)
+        job.findings = _aggregate_info_findings(job.findings)
+        if before_agg != len(job.findings):
+            log.info("[%s] Aggregation: %d → %d findings", job.id, before_agg, len(job.findings))
 
         # Phase 4: AI review
         job.status = ScanStatus.AI_REVIEW
