@@ -114,7 +114,7 @@ class TestAiReview:
         job.manifest = ManifestInfo(component_type=ComponentType.INTEGRATION)
 
         mock_response = {
-            "text": '{"score": 9.5, "summary": "Very safe", "findings": []}',
+            "text": '{"score": 9.5, "confidence": 95, "summary": "Very safe", "findings": []}',
             "analysis": "Looks clean",
         }
         cfg = {"ai_provider": "ollama", "max_code_context": 5000, "ai_timeout": 30}
@@ -124,7 +124,8 @@ class TestAiReview:
             await ai_review(job, fixture_safe_py)
 
         assert job.ai_score == 9.5
-        assert job.ai_summary == "Very safe"
+        assert "Very safe" in job.ai_summary
+        assert "confidence: 95%" in job.ai_summary
 
     @pytest.mark.asyncio
     async def test_public_provider(self, fixture_safe_py):
@@ -132,7 +133,7 @@ class TestAiReview:
         job.manifest = ManifestInfo(component_type=ComponentType.INTEGRATION)
 
         mock_response = {
-            "text": '{"score": 8.0, "summary": "Good", "findings": [{"severity": "low", "category": "info", "description": "Minor", "file": "x.py"}]}',
+            "text": '{"score": 8.0, "confidence": 90, "summary": "Good", "findings": [{"severity": "low", "category": "info", "description": "Minor", "file": "x.py", "confidence": 85}]}',
             "analysis": "",
         }
         cfg = {"ai_provider": "public", "public_api_key": "sk-test", "max_code_context": 5000, "ai_timeout": 30}
