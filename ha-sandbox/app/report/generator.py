@@ -13,8 +13,11 @@ from app.models import ScanJob
 log = logging.getLogger(__name__)
 
 
-def generate_report(job: ScanJob) -> Path:
-    """Generate and save JSON report for a scan job."""
+def generate_report(job: ScanJob, learning_data: dict | None = None) -> Path:
+    """Generate and save JSON report for a scan job.
+
+    learning_data (optional): dict with keys fingerprint_changes, deviations, fingerprint
+    """
     report_dir = Path(settings.reports_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -46,6 +49,9 @@ def generate_report(job: ScanJob) -> Path:
             for f in job.findings
         ],
     }
+
+    if learning_data:
+        report["learning"] = learning_data
 
     filepath = report_dir / f"{job.id}.json"
     filepath.write_text(json.dumps(report, indent=2, ensure_ascii=False))
