@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0] - 2026-03-09
+
+### Added (Dependency Scanner Enhancement — 3/5 → 5/5)
+- **npm/package.json scanning** — parse dependencies + devDependencies, query OSV.dev with ecosystem=npm
+- **requirements.txt auto-discovery** — find and scan all `requirements*.txt` files in repo
+- **pyproject.toml parsing** — extract `[project.dependencies]` for CVE checking
+- **Known malicious package detection** — 30+ PyPI + 25+ npm typosquatting/supply chain packages (CRITICAL severity)
+- **OSV.dev batch query** — `/v1/querybatch` for efficient bulk CVE lookup (100 per batch)
+- **Repo-wide dependency scan** — `check_cve_repo()` discovers all dep files automatically
+- **Pipeline integration** — Phase 1c scans repo deps in addition to manifest requirements
+- 21 new tests (265 total)
+
 ## [0.10.0] - 2026-03-09
 
 ### Added (YAML Scanner Enhancement — 2/5 → 4/5)
