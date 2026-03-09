@@ -42,7 +42,7 @@ SUSPICIOUS_PATTERNS = [
     ("analytics", Severity.LOW, "telemetry", "Possible analytics/telemetry"),
     ("google-analytics", Severity.MEDIUM, "telemetry", "Google Analytics tracking"),
     ("sentry", Severity.LOW, "telemetry", "Sentry error tracking"),
-    ("tracking", Severity.LOW, "telemetry", "Possible tracking code"),
+    ("tracking_url", Severity.LOW, "telemetry", "Possible tracking URL"),
 ]
 
 # ──────────────────────────────────────────────────────────────────────
