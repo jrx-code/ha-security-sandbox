@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 DANGEROUS_CALLS = {
     "eval": ("code_injection", Severity.CRITICAL, "eval() can execute arbitrary code"),
     "exec": ("code_injection", Severity.CRITICAL, "exec() can execute arbitrary code"),
-    "compile": ("code_injection", Severity.HIGH, "compile() can create executable code"),
+    "compile": ("code_injection", Severity.MEDIUM, "compile() can create executable code"),
     "__import__": ("code_injection", Severity.HIGH, "Dynamic import can load arbitrary modules"),
 }
 
@@ -130,6 +130,11 @@ class PythonASTVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call):
         name = self._get_call_name(node)
         if name in DANGEROUS_CALLS:
+            # Skip re.compile() — it's regex compilation, not code injection
+            if name == "compile" and isinstance(node.func, ast.Attribute):
+                if isinstance(node.func.value, ast.Name) and node.func.value.id == "re":
+                    self.generic_visit(node)
+                    return
             cat, sev, desc = DANGEROUS_CALLS[name]
             self.findings.append(Finding(
                 severity=sev, category=cat, file=self.filepath,
@@ -377,6 +382,35 @@ def scan_python_file(filepath: Path) -> list[Finding]:
     return findings
 
 
+def _cap_findings_per_file(findings: list[Finding], max_per_cat: int = 3) -> list[Finding]:
+    """Cap findings to max_per_cat per category per file to reduce noise."""
+    counts: dict[tuple[str, str], int] = {}  # (file, category) -> count
+    capped: list[Finding] = []
+    for f in findings:
+        key = (f.file, f.category)
+        counts[key] = counts.get(key, 0) + 1
+        if counts[key] <= max_per_cat:
+            capped.append(f)
+    return capped
+
+
+def _aggregate_network_findings(findings: list[Finding], max_count: int = 5) -> list[Finding]:
+    """Aggregate network import findings — keep max_count, summarize rest."""
+    network = [f for f in findings if f.category == "network"]
+    other = [f for f in findings if f.category != "network"]
+    if len(network) <= max_count:
+        return findings
+    kept = network[:max_count]
+    dropped = len(network) - max_count
+    kept.append(Finding(
+        severity=Severity.INFO,
+        category="network",
+        file="(aggregated)",
+        description=f"...and {dropped} more network imports (total {len(network)} across repo)",
+    ))
+    return other + kept
+
+
 def scan_python_repo(repo_path: Path) -> list[Finding]:
     """Scan all Python files in a repository."""
     findings = []
@@ -386,4 +420,5 @@ def scan_python_repo(repo_path: Path) -> list[Finding]:
         if any(skip in rel.split("/") for skip in ["tests", ".venv", "node_modules", "__pycache__"]):
             continue
         findings.extend(scan_python_file(pyfile))
-    return findings
+    findings = _cap_findings_per_file(findings)
+    return _aggregate_network_findings(findings)

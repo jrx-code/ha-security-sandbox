@@ -546,3 +546,80 @@ class TestObfuscationDetection:
         findings = scan_js_file(f)
         iframe = [fi for fi in findings if fi.category == "script_injection" and "iframe" in fi.description.lower()]
         assert len(iframe) >= 1
+
+
+class TestNoiseReduction:
+    """Tests for finding cap, network aggregation, and re.compile() filtering."""
+
+    def test_re_compile_not_flagged(self, tmp_path):
+        """re.compile() should NOT be flagged as code_injection."""
+        f = tmp_path / "regexes.py"
+        f.write_text("import re\npattern = re.compile(r'\\d+')\n")
+        findings = scan_python_file(f)
+        code_inj = [fi for fi in findings if fi.category == "code_injection"]
+        assert len(code_inj) == 0
+
+    def test_builtin_compile_still_flagged(self, tmp_path):
+        """Built-in compile() should still be flagged."""
+        f = tmp_path / "evil_compile.py"
+        f.write_text("code = compile('print(1)', '<string>', 'exec')\n")
+        findings = scan_python_file(f)
+        code_inj = [fi for fi in findings if fi.category == "code_injection"]
+        assert len(code_inj) >= 1
+
+    def test_compile_severity_medium(self, tmp_path):
+        """compile() severity should be MEDIUM, not HIGH."""
+        f = tmp_path / "compile_sev.py"
+        f.write_text("code = compile('x', 'f', 'exec')\n")
+        findings = scan_python_file(f)
+        code_inj = [fi for fi in findings if fi.category == "code_injection"]
+        assert code_inj[0].severity == Severity.MEDIUM
+
+    def test_python_per_file_cap(self, tmp_path):
+        """More than 3 findings of same category in one file should be capped."""
+        init = tmp_path / "custom_components" / "cap" / "__init__.py"
+        init.parent.mkdir(parents=True)
+        manifest = tmp_path / "custom_components" / "cap" / "manifest.json"
+        manifest.write_text('{"domain":"cap","name":"Cap"}')
+        # 10 network imports = should be capped to 3 per file + aggregated
+        lines = [f"import {m}" for m in ["requests", "httpx", "urllib", "aiohttp",
+                 "socket", "ftplib", "smtplib", "urllib3"]]
+        init.write_text("\n".join(lines) + "\n")
+        findings = scan_python_repo(tmp_path)
+        network = [f for f in findings if f.category == "network"]
+        # Per-file cap (3) + aggregation (max 5 kept + 1 summary)
+        assert len(network) <= 6
+
+    def test_js_per_file_cap(self, tmp_path):
+        """JS findings should be capped per category per file via scan_js_repo."""
+        f = tmp_path / "noisy.js"
+        # 10 innerHTML assignments
+        lines = ["el{0}.innerHTML = data{0};".format(i) for i in range(10)]
+        f.write_text("\n".join(lines))
+        findings = scan_js_repo(tmp_path)
+        xss = [fi for fi in findings if fi.category == "xss"]
+        assert len(xss) <= 3
+
+    def test_appendchild_not_flagged(self, tmp_path):
+        """appendChild should no longer generate findings (too noisy)."""
+        f = tmp_path / "append.js"
+        f.write_text("container.appendChild(div);\nparent.appendChild(child);\n")
+        findings = scan_js_file(f)
+        dom = [fi for fi in findings if fi.category == "dom_manipulation"]
+        assert len(dom) == 0
+
+    def test_vendor_files_skipped(self, tmp_path):
+        """Vendor files like docsify.min.js should be skipped."""
+        vendor = tmp_path / "docsify.min.js"
+        vendor.write_text("eval('malicious');")
+        findings = scan_js_repo(tmp_path)
+        assert len([f for f in findings if "docsify" in (f.file or "")]) == 0
+
+    def test_docs_dir_skipped(self, tmp_path):
+        """Files in docs/ directory should be skipped."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        f = docs / "helper.js"
+        f.write_text("eval('test');")
+        findings = scan_js_repo(tmp_path)
+        assert len(findings) == 0

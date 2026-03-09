@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0] - 2026-03-09
+
+### Improved (batch scan on 50 HACS repos)
+- **Noise reduction**: findings cut by 90%+ on large repos (e.g. 804→13 for waste_collection_schedule)
+- `re.compile()` no longer flagged as code injection (only bare `compile()`)
+- `compile()` severity reduced from HIGH to MEDIUM (legitimate use common)
+- Per-file finding cap: max 3 findings per category per file
+- Network import aggregation: max 5 kept + summary for repos with many modules
+- `parse_info` aggregated: 1 per repo instead of 1 per file (412→1 for large cards)
+- Removed noisy `appendChild` detection (LOW value, extreme volume)
+- Vendor/third-party JS files skipped (docsify, prism, marked, etc.)
+- `docs/` directory excluded from JS scanning
+- 8 new tests for noise reduction (222 total)
+
 ## [0.8.0] - 2026-03-09
 
 ### Added
