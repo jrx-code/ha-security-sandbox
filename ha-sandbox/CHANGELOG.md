@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0] - 2026-03-09
+
+### Added (YAML Scanner Enhancement — 2/5 → 4/5)
+- **Structural YAML parsing** via `yaml.safe_load()` — analyzes parsed tree, not just regex
+- **Automation flow injection detection** — `service_template`, dynamic `service` with templates, template values in `data` flowing to `shell_command`
+- **Nested action scanning** — follows `choose/sequence/then/else/default` structures
+- **rest_command HTTP detection** — flags `rest_command` and `rest` using HTTP (not HTTPS)
+- **!include path validation** — detects template paths, absolute paths, parent traversal (`..`)
+- **Secrets in comments** — finds password/token/api_key values accidentally left in YAML comments
+- **Per-file finding cap** — max 3 per category per file (consistent with Python/JS/HA scanners)
+- **Standalone automation list support** — scans list-at-root automation files
+- 22 new tests (244 total)
+
 ## [0.9.0] - 2026-03-09
 
 ### Improved (batch scan on 50 HACS repos)
