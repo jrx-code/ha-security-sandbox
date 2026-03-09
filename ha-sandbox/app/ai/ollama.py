@@ -10,12 +10,60 @@ from app.models import Finding, ScanJob, Severity
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a security auditor for Home Assistant custom components.
-Analyze the provided code and respond with a JSON security report.
-Output ONLY valid JSON with this schema:
-{"score": number 0-10, "summary": "string", "findings": [{"severity": "critical|high|medium|low", "category": "string", "description": "string", "file": "string"}]}
-Score 10 = perfectly safe. Score 0 = critically dangerous.
-Be specific about actual issues found in the code provided. Do not invent findings."""
+SYSTEM_PROMPT = """You are a security auditor specializing in Home Assistant custom components (integrations and Lovelace cards installed via HACS).
+
+## Scoring rubric
+
+Rate the component 0–10 using this rubric:
+- 9-10: No security issues. Standard HA patterns, no dangerous APIs.
+- 7-8: Minor concerns (e.g., localStorage usage, telemetry, broad entity access) but no exploitable vulnerabilities.
+- 5-6: Moderate risks (e.g., innerHTML assignment, dynamic service calls, network requests to external servers without user visibility).
+- 3-4: Significant risks (e.g., eval/exec usage, shell commands with user input, unrestricted file access, data exfiltration patterns).
+- 0-2: Critical — actively dangerous (e.g., arbitrary code execution, credential theft, backdoor functionality).
+
+## Output format
+
+Respond with ONLY valid JSON matching this schema:
+{
+  "score": <number 0-10>,
+  "confidence": <number 0-100, your confidence in the score>,
+  "summary": "<2-3 sentence summary of security posture>",
+  "findings": [
+    {
+      "severity": "critical|high|medium|low",
+      "category": "<e.g. code_injection, xss, data_exfiltration, command_execution>",
+      "description": "<specific description of what the code does and why it's risky>",
+      "file": "<relative file path>",
+      "confidence": <number 0-100, confidence this is a real issue>
+    }
+  ]
+}
+
+## Rules
+
+- Only report issues actually present in the provided code. Do NOT invent findings.
+- If static analysis already flagged an issue, confirm or dismiss it — don't just repeat it.
+- For each finding, explain the specific code pattern you found and why it matters.
+- Set confidence lower when you're uncertain (e.g., the code pattern might be safe in context).
+- HA integrations legitimately use hass.services.call, hass.states.set, network requests — these are normal. Only flag when the usage pattern is unsafe.
+
+## Example
+
+For a component that uses eval() with user config data:
+{
+  "score": 2,
+  "confidence": 95,
+  "summary": "Critical: Component passes user configuration directly to eval(), enabling arbitrary code execution on the HA host.",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "code_injection",
+      "description": "config_entry.data['expression'] is passed directly to eval() in sensor.py:45, allowing arbitrary Python execution",
+      "file": "custom_components/evil/sensor.py",
+      "confidence": 98
+    }
+  ]
+}"""
 
 
 def _get_ai_config() -> dict:
@@ -177,10 +225,20 @@ async def ai_review(job: ScanJob, repo_path: Path) -> None:
     code_context = _build_code_context(repo_path, cfg.get("max_code_context"))
     static_context = _format_static_findings(job.findings)
 
-    user_prompt = f"""Review this Home Assistant component: {job.name}
-Type: {job.manifest.component_type.value if job.manifest else 'unknown'}
+    comp_type = job.manifest.component_type.value if job.manifest else "unknown"
+    user_prompt = f"""Review this Home Assistant custom component for security issues.
+
+Component: {job.name}
+Type: {comp_type}
+Repository: {job.repo_url}
 
 {static_context}
+
+The static analyzer flagged the issues above. Review the actual code below and:
+1. Confirm or dismiss each static finding based on context
+2. Identify any additional security issues the static analyzer missed
+3. Score the component using the rubric (0-10)
+4. Set confidence levels for each finding and the overall score
 
 Code:
 {code_context}"""
@@ -194,7 +252,11 @@ Code:
 
         data = _parse_json_response(result["text"])
         job.ai_score = min(10.0, max(0.0, float(data.get("score", 5.0))))
-        job.ai_summary = data.get("summary", "")
+        confidence = data.get("confidence", 50)
+        summary = data.get("summary", "")
+        if confidence < 100:
+            summary += f" (AI confidence: {confidence}%)"
+        job.ai_summary = summary
 
         for f in data.get("findings", []):
             sev = f.get("severity", "medium")
@@ -202,11 +264,15 @@ Code:
                 severity = Severity(sev)
             except ValueError:
                 severity = Severity.MEDIUM
+            finding_confidence = f.get("confidence", 50)
+            desc = f.get("description", "")
+            if finding_confidence < 80:
+                desc += f" [confidence: {finding_confidence}%]"
             job.findings.append(Finding(
                 severity=severity,
                 category=f.get("category", "ai_review"),
                 file=f.get("file", ""),
-                description=f.get("description", ""),
+                description=desc,
                 code="[AI finding]",
             ))
 
