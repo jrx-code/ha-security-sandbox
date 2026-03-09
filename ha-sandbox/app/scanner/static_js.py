@@ -18,37 +18,51 @@ log = logging.getLogger(__name__)
 
 # Dangerous global function calls
 _DANGEROUS_CALLS: dict[str, tuple[Severity, str, str]] = {
-    "eval": (Severity.CRITICAL, "code_injection", "eval() can execute arbitrary code"),
-    "Function": (Severity.CRITICAL, "code_injection", "Function() constructor creates executable code"),
-    "unescape": (Severity.MEDIUM, "obfuscation", "unescape() may decode hidden content"),
+    "eval": (Severity.CRITICAL, "code_injection",
+             "eval() executes arbitrary code — replace with JSON.parse() or remove; if needed, verify input is sanitized"),
+    "Function": (Severity.CRITICAL, "code_injection",
+                 "Function() constructor creates executable code — replace with direct function definition"),
+    "unescape": (Severity.MEDIUM, "obfuscation",
+                 "unescape() decodes hidden content — replace with decodeURIComponent(); check what is being decoded"),
 }
 
 # Dangerous method calls (object.method)
 _DANGEROUS_METHODS: dict[tuple[str, str], tuple[Severity, str, str]] = {
-    ("document", "write"): (Severity.HIGH, "xss", "document.write can inject arbitrary HTML"),
-    ("document", "writeln"): (Severity.HIGH, "xss", "document.writeln can inject arbitrary HTML"),
+    ("document", "write"): (Severity.HIGH, "xss",
+                            "document.write() injects raw HTML — replace with textContent or DOM API; verify no user input flows here"),
+    ("document", "writeln"): (Severity.HIGH, "xss",
+                              "document.writeln() injects raw HTML — replace with textContent or DOM API"),
     ("document", "createElement"): (Severity.MEDIUM, "script_injection", "Dynamic element creation"),
-    ("navigator", "sendBeacon"): (Severity.HIGH, "data_exfiltration", "sendBeacon can transmit data silently"),
-    ("String", "fromCharCode"): (Severity.MEDIUM, "obfuscation", "Character code construction may hide strings"),
+    ("navigator", "sendBeacon"): (Severity.HIGH, "data_exfiltration",
+                                  "sendBeacon() silently sends data to external server — verify destination URL and payload contents"),
+    ("String", "fromCharCode"): (Severity.MEDIUM, "obfuscation",
+                                 "String.fromCharCode() builds strings from char codes — check if used to hide URLs or malicious code"),
 }
 
 # Dangerous property member access (object.property)
 _DANGEROUS_MEMBERS: dict[tuple[str, str], tuple[Severity, str, str]] = {
-    ("document", "cookie"): (Severity.MEDIUM, "data_access", "Cookie access"),
-    ("navigator", "userAgent"): (Severity.LOW, "telemetry", "User agent reading"),
-    ("navigator", "language"): (Severity.LOW, "telemetry", "Language detection"),
+    ("document", "cookie"): (Severity.MEDIUM, "data_access",
+                             "Reads document.cookie — check if cookies are sent externally or stored; HA cards should not need cookie access"),
+    ("navigator", "userAgent"): (Severity.LOW, "telemetry",
+                                 "Reads browser user-agent — often used for fingerprinting; verify it's for compatibility, not tracking"),
+    ("navigator", "language"): (Severity.LOW, "telemetry",
+                                "Reads browser language — verify it's for localization, not user profiling"),
 }
 
 # Dangerous property assignments (x.property = ...)
 _DANGEROUS_ASSIGNMENTS: dict[str, tuple[Severity, str, str]] = {
-    "innerHTML": (Severity.MEDIUM, "xss", "innerHTML assignment can introduce XSS"),
-    "outerHTML": (Severity.MEDIUM, "xss", "outerHTML assignment can introduce XSS"),
+    "innerHTML": (Severity.MEDIUM, "xss",
+                  "innerHTML assignment — if value contains user/entity data, use textContent or sanitize with DOMPurify"),
+    "outerHTML": (Severity.MEDIUM, "xss",
+                  "outerHTML assignment — if value contains user/entity data, use DOM API or sanitize"),
 }
 
 # Dangerous constructor calls (new X(...))
 _DANGEROUS_CONSTRUCTORS: dict[str, tuple[Severity, str, str]] = {
-    "WebSocket": (Severity.MEDIUM, "network", "WebSocket connection"),
-    "Image": (Severity.MEDIUM, "data_exfiltration", "Image object can be used for tracking/exfiltration"),
+    "WebSocket": (Severity.MEDIUM, "network",
+                  "WebSocket connection — verify destination is the HA instance, not an external server"),
+    "Image": (Severity.MEDIUM, "data_exfiltration",
+              "new Image() can silently load external URLs (tracking pixel) — check if .src is set to external domain"),
 }
 
 # Network/fetch calls (INFO level — not inherently dangerous)
@@ -59,11 +73,11 @@ _TIMER_FUNCTIONS: set[str] = {"setTimeout", "setInterval"}
 
 # Telemetry identifiers
 _TELEMETRY_IDS: dict[str, tuple[Severity, str]] = {
-    "gtag": (Severity.HIGH, "Google Analytics tracking"),
-    "ga": (Severity.HIGH, "Google Analytics tracking"),
-    "mixpanel": (Severity.MEDIUM, "Mixpanel analytics SDK"),
-    "amplitude": (Severity.MEDIUM, "Amplitude analytics SDK"),
-    "segment": (Severity.MEDIUM, "Segment analytics SDK"),
+    "gtag": (Severity.HIGH, "Google Analytics (gtag) — tracks user behavior; HA components should not include analytics"),
+    "ga": (Severity.HIGH, "Google Analytics (ga) — tracks user behavior; HA components should not include analytics"),
+    "mixpanel": (Severity.MEDIUM, "Mixpanel analytics — sends user interaction data to third party; should be removed"),
+    "amplitude": (Severity.MEDIUM, "Amplitude analytics — sends user interaction data to third party; should be removed"),
+    "segment": (Severity.MEDIUM, "Segment analytics — aggregates user data to third party; should be removed"),
 }
 
 # Storage APIs
@@ -206,7 +220,7 @@ def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
                 # insertAdjacentHTML
                 if member[1] == "insertAdjacentHTML":
                     add(Severity.MEDIUM, "xss",
-                        "insertAdjacentHTML can introduce XSS", node)
+                        "insertAdjacentHTML — sanitize input or use insertAdjacentText for plain text", node)
 
         # --- NewExpression: new WebSocket(), new Image() ---
         elif ntype == "NewExpression":
@@ -227,7 +241,9 @@ def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
             obj = node.get("object", {})
             obj_name = obj.get("name") if obj.get("type") == "Identifier" else None
             if obj_name in _STORAGE_IDS:
-                add(Severity.LOW, "data_access", f"{obj_name} access", node)
+                add(Severity.LOW, "data_access",
+                    f"{obj_name} — check what data is stored; HA cards should not persist sensitive tokens or credentials",
+                    node)
 
         # --- AssignmentExpression: x.innerHTML = ... ---
         elif ntype == "AssignmentExpression":
@@ -265,31 +281,55 @@ def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
 # ──────────────────────────────────────────────────────────────────────
 
 JS_PATTERNS: list[tuple[str, Severity, str, str]] = [
-    (r'\beval\s*\(', Severity.CRITICAL, "code_injection", "eval() can execute arbitrary code"),
+    (r'\beval\s*\(', Severity.CRITICAL, "code_injection",
+     "eval() executes arbitrary code — replace with JSON.parse() or remove"),
     # Function() constructor handled separately (case-sensitive) below
-    (r'setTimeout\s*\(\s*["\']', Severity.HIGH, "code_injection", "setTimeout with string argument acts as eval"),
-    (r'setInterval\s*\(\s*["\']', Severity.HIGH, "code_injection", "setInterval with string argument acts as eval"),
-    (r'\.innerHTML\s*=', Severity.MEDIUM, "xss", "innerHTML assignment can introduce XSS"),
-    (r'document\.write\s*\(', Severity.HIGH, "xss", "document.write can inject arbitrary HTML"),
-    (r'\.insertAdjacentHTML\s*\(', Severity.MEDIUM, "xss", "insertAdjacentHTML can introduce XSS"),
-    (r'\bfetch\s*\(', Severity.INFO, "network", "fetch() makes network requests"),
-    (r'XMLHttpRequest', Severity.INFO, "network", "XMLHttpRequest makes network requests"),
-    (r'WebSocket\s*\(', Severity.MEDIUM, "network", "WebSocket connection"),
-    (r'navigator\.sendBeacon', Severity.HIGH, "data_exfiltration", "sendBeacon can transmit data silently"),
-    (r'document\.createElement\s*\(\s*["\']script', Severity.HIGH, "script_injection", "Dynamic script element creation"),
-    (r'document\.createElement\s*\(\s*["\']iframe', Severity.HIGH, "script_injection", "Dynamic iframe creation — may load external content"),
-    (r'atob\s*\(', Severity.MEDIUM, "obfuscation", "Base64 decode (atob) may hide payloads"),
-    (r'String\.fromCharCode', Severity.MEDIUM, "obfuscation", "Character code construction may hide strings"),
-    (r'unescape\s*\(', Severity.MEDIUM, "obfuscation", "unescape() may decode hidden content"),
-    (r'localStorage', Severity.LOW, "data_access", "localStorage access"),
-    (r'sessionStorage', Severity.LOW, "data_access", "sessionStorage access"),
-    (r'document\.cookie', Severity.MEDIUM, "data_access", "Cookie access"),
-    (r'google[\-_]?analytics|gtag|ga\s*\(', Severity.HIGH, "telemetry", "Google Analytics tracking"),
-    (r'sentry', Severity.LOW, "telemetry", "Sentry error tracking"),
-    (r'mixpanel|amplitude|segment', Severity.MEDIUM, "telemetry", "Third-party analytics SDK"),
-    (r'paypal\.com|paypal\.me|paypalobjects\.com', Severity.MEDIUM, "payment", "PayPal payment integration — unusual in HA components"),
-    (r'stripe\.com|stripe\.js', Severity.MEDIUM, "payment", "Stripe payment integration — unusual in HA components"),
-    (r'workers\.dev', Severity.MEDIUM, "network", "Cloudflare Workers proxy — may relay data through third-party"),
+    (r'setTimeout\s*\(\s*["\']', Severity.HIGH, "code_injection",
+     "setTimeout with string argument acts as eval — pass a function reference instead"),
+    (r'setInterval\s*\(\s*["\']', Severity.HIGH, "code_injection",
+     "setInterval with string argument acts as eval — pass a function reference instead"),
+    (r'\.innerHTML\s*=', Severity.MEDIUM, "xss",
+     "innerHTML assignment — use textContent for plain text or sanitize with DOMPurify"),
+    (r'document\.write\s*\(', Severity.HIGH, "xss",
+     "document.write() injects raw HTML — replace with DOM API (createElement/textContent)"),
+    (r'\.insertAdjacentHTML\s*\(', Severity.MEDIUM, "xss",
+     "insertAdjacentHTML — sanitize input or use insertAdjacentText for plain text"),
+    (r'\bfetch\s*\(', Severity.INFO, "network",
+     "fetch() makes network requests — verify URL points to HA instance, not external server"),
+    (r'XMLHttpRequest', Severity.INFO, "network",
+     "XMLHttpRequest — verify URL points to HA instance, not external server"),
+    (r'WebSocket\s*\(', Severity.MEDIUM, "network",
+     "WebSocket connection — verify destination is HA instance, not external server"),
+    (r'navigator\.sendBeacon', Severity.HIGH, "data_exfiltration",
+     "sendBeacon() silently sends data — verify destination URL and what data is transmitted"),
+    (r'document\.createElement\s*\(\s*["\']script', Severity.HIGH, "script_injection",
+     "Dynamic <script> creation — verify src attribute is not loading external/untrusted code"),
+    (r'document\.createElement\s*\(\s*["\']iframe', Severity.HIGH, "script_injection",
+     "Dynamic <iframe> creation — verify src is not loading external content into HA dashboard"),
+    (r'atob\s*\(', Severity.MEDIUM, "obfuscation",
+     "Base64 decode (atob) — check what is being decoded; may hide URLs or malicious payloads"),
+    (r'String\.fromCharCode', Severity.MEDIUM, "obfuscation",
+     "String.fromCharCode() — check if used to construct hidden URLs or bypass content filters"),
+    (r'unescape\s*\(', Severity.MEDIUM, "obfuscation",
+     "unescape() decodes encoded content — replace with decodeURIComponent(); check decoded value"),
+    (r'localStorage', Severity.LOW, "data_access",
+     "localStorage — check what data is stored; HA cards should not persist sensitive tokens"),
+    (r'sessionStorage', Severity.LOW, "data_access",
+     "sessionStorage — check what data is stored; avoid persisting auth tokens or entity states"),
+    (r'document\.cookie', Severity.MEDIUM, "data_access",
+     "Cookie access — HA cards should not read/write cookies; check if cookies are sent externally"),
+    (r'google[\-_]?analytics|gtag|ga\s*\(', Severity.HIGH, "telemetry",
+     "Google Analytics — tracks user behavior on your HA dashboard; should be removed from HA components"),
+    (r'sentry', Severity.LOW, "telemetry",
+     "Sentry error tracking — sends error reports to external service; verify no sensitive HA data is included"),
+    (r'mixpanel|amplitude|segment', Severity.MEDIUM, "telemetry",
+     "Third-party analytics SDK — sends user interaction data externally; should be removed from HA components"),
+    (r'paypal\.com|paypal\.me|paypalobjects\.com', Severity.MEDIUM, "payment",
+     "PayPal integration — unusual in HA components; may indicate hidden paywall or donation prompt"),
+    (r'stripe\.com|stripe\.js', Severity.MEDIUM, "payment",
+     "Stripe integration — unusual in HA components; may indicate hidden paywall or payment system"),
+    (r'workers\.dev', Severity.MEDIUM, "network",
+     "Cloudflare Workers proxy — data may be relayed through third-party; verify what is proxied and why"),
 ]
 
 _COMPILED = [(re.compile(pat, re.IGNORECASE), sev, cat, desc)
