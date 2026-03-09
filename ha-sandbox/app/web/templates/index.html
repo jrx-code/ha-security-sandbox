@@ -101,11 +101,12 @@
     <div id="tab-custom" class="tab-content active">
         <div class="card">
             <h3>Scan by Repository URL or GitHub path</h3>
-            <form method="POST" action="{{ base }}/scan/url">
-                <input type="text" name="url" placeholder="https://github.com/user/repo or user/repo" required>
-                <input type="text" name="name" placeholder="Component name (optional)">
-                <button type="submit">Scan</button>
+            <form id="custom-scan-form" onsubmit="return submitCustomScan(event)">
+                <input type="text" id="scan-url" placeholder="https://github.com/user/repo or user/repo" required>
+                <input type="text" id="scan-name" placeholder="Component name (optional)">
+                <button type="submit" id="scan-btn">Scan</button>
             </form>
+            <div id="scan-feedback" style="display:none; margin-top:10px; padding:10px 14px; border-radius:8px; font-size:0.9em;"></div>
         </div>
     </div>
 
@@ -218,11 +219,7 @@ async function loadInstalled() {
             <div class="installed-item">
                 <span class="installed-name"><strong>${c.name}</strong> <small style="color:var(--text-muted)">${c.installed_version || ''}</small></span>
                 <span class="installed-cat">${c.category}</span>
-                <form method="POST" action="${BASE}/scan/repo" style="display:inline">
-                    <input type="hidden" name="repo" value="${c.repository}">
-                    <input type="hidden" name="name" value="${c.name}">
-                    <button class="btn btn-sm" type="submit">Scan</button>
-                </form>
+                <button class="btn btn-sm" onclick="scanInstalled('${c.repository}', '${c.name}', this)">Scan</button>
             </div>
         `).join('');
     } catch (e) {
@@ -303,6 +300,54 @@ async function clearResults() {
 
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 document.getElementById('modal').addEventListener('click', e => { if (e.target.classList.contains('modal-bg')) closeModal(); });
+
+async function submitCustomScan(e) {
+    e.preventDefault();
+    const url = document.getElementById('scan-url').value.trim();
+    const name = document.getElementById('scan-name').value.trim();
+    const btn = document.getElementById('scan-btn');
+    const fb = document.getElementById('scan-feedback');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    try {
+        const form = new URLSearchParams();
+        form.append('url', url);
+        if (name) form.append('name', name);
+        const resp = await fetch(BASE + '/scan/url', {method: 'POST', body: form, redirect: 'manual'});
+        fb.style.display = 'block';
+        fb.style.background = 'rgba(163,190,140,0.15)';
+        fb.style.color = 'var(--safe)';
+        fb.textContent = 'Scan started — switching to Results tab...';
+        document.getElementById('scan-url').value = '';
+        document.getElementById('scan-name').value = '';
+        setTimeout(() => { switchTab('results'); location.reload(); }, 1500);
+    } catch (err) {
+        fb.style.display = 'block';
+        fb.style.background = 'rgba(191,97,106,0.15)';
+        fb.style.color = 'var(--danger)';
+        fb.textContent = 'Failed to start scan: ' + err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Scan';
+    return false;
+}
+
+async function scanInstalled(repo, name, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    try {
+        const form = new URLSearchParams();
+        form.append('repo', repo);
+        form.append('name', name);
+        await fetch(BASE + '/scan/repo', {method: 'POST', body: form, redirect: 'manual'});
+        btn.textContent = 'Started';
+        btn.style.background = 'var(--safe)';
+        setTimeout(() => { switchTab('results'); location.reload(); }, 1500);
+    } catch (err) {
+        btn.textContent = 'Failed';
+        btn.style.background = 'var(--danger)';
+    }
+}
 
 // Auto-refresh active scans
 let _hadRunning = {{ 'true' if active_jobs else 'false' }};
