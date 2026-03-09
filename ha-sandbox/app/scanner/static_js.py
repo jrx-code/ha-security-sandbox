@@ -122,14 +122,16 @@ def _has_string_arg(node: dict) -> bool:
     return False
 
 
-def _check_createElement_script(node: dict) -> bool:
-    """Check if createElement is called with 'script' argument."""
+def _check_createElement_dangerous(node: dict) -> str | None:
+    """Check if createElement is called with 'script' or 'iframe' argument."""
     args = node.get("arguments", [])
     if args and isinstance(args, list) and len(args) > 0:
         first_arg = args[0]
-        if first_arg.get("type") == "Literal" and first_arg.get("value") == "script":
-            return True
-    return False
+        if first_arg.get("type") == "Literal":
+            val = first_arg.get("value")
+            if val in ("script", "iframe"):
+                return val
+    return None
 
 
 def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
@@ -189,11 +191,15 @@ def _scan_js_ast(source: str, filepath: str) -> list[Finding]:
             if member:
                 if member in _DANGEROUS_METHODS:
                     sev, cat, desc = _DANGEROUS_METHODS[member]
-                    # Special case: document.createElement('script')
+                    # Special case: document.createElement('script'/'iframe')
                     if member == ("document", "createElement"):
-                        if _check_createElement_script(node):
+                        tag = _check_createElement_dangerous(node)
+                        if tag == "script":
                             add(Severity.HIGH, "script_injection",
                                 "Dynamic script element creation", node)
+                        elif tag == "iframe":
+                            add(Severity.HIGH, "script_injection",
+                                "Dynamic iframe creation — may load external content", node)
                     else:
                         add(sev, cat, desc, node)
 
@@ -276,6 +282,7 @@ JS_PATTERNS: list[tuple[str, Severity, str, str]] = [
     (r'WebSocket\s*\(', Severity.MEDIUM, "network", "WebSocket connection"),
     (r'navigator\.sendBeacon', Severity.HIGH, "data_exfiltration", "sendBeacon can transmit data silently"),
     (r'document\.createElement\s*\(\s*["\']script', Severity.HIGH, "script_injection", "Dynamic script element creation"),
+    (r'document\.createElement\s*\(\s*["\']iframe', Severity.HIGH, "script_injection", "Dynamic iframe creation — may load external content"),
     (r'atob\s*\(', Severity.MEDIUM, "obfuscation", "Base64 decode (atob) may hide payloads"),
     (r'String\.fromCharCode', Severity.MEDIUM, "obfuscation", "Character code construction may hide strings"),
     (r'unescape\s*\(', Severity.MEDIUM, "obfuscation", "unescape() may decode hidden content"),
@@ -285,6 +292,9 @@ JS_PATTERNS: list[tuple[str, Severity, str, str]] = [
     (r'google[\-_]?analytics|gtag|ga\s*\(', Severity.HIGH, "telemetry", "Google Analytics tracking"),
     (r'sentry', Severity.LOW, "telemetry", "Sentry error tracking"),
     (r'mixpanel|amplitude|segment', Severity.MEDIUM, "telemetry", "Third-party analytics SDK"),
+    (r'paypal\.com|paypal\.me|paypalobjects\.com', Severity.MEDIUM, "payment", "PayPal payment integration — unusual in HA components"),
+    (r'stripe\.com|stripe\.js', Severity.MEDIUM, "payment", "Stripe payment integration — unusual in HA components"),
+    (r'workers\.dev', Severity.MEDIUM, "network", "Cloudflare Workers proxy — may relay data through third-party"),
 ]
 
 _COMPILED = [(re.compile(pat, re.IGNORECASE), sev, cat, desc)
@@ -378,6 +388,55 @@ def _detect_obfuscation(source: str, filepath: str) -> list[Finding]:
                     "Hidden network calls in obfuscated code may exfiltrate data."
                 ),
             ))
+
+    # Detect hidden license/activation/paywall system
+    license_refs = len(re.findall(r'\blicen[sc]e\b', source, re.IGNORECASE))
+    activation_refs = len(re.findall(r'\bactivat(?:ion|e|ed)\b', source, re.IGNORECASE))
+    premium_refs = len(re.findall(r'\b(?:premium|freemium|subscription|trial)\b', source, re.IGNORECASE))
+    paywall_score = license_refs + activation_refs * 3 + premium_refs * 2
+    if paywall_score >= 20:
+        findings.append(Finding(
+            severity=Severity.HIGH,
+            category="hidden_paywall",
+            file=filepath,
+            line=1,
+            description=(
+                f"Hidden license/activation system in obfuscated code "
+                f"({license_refs} license, {activation_refs} activation, {premium_refs} premium refs). "
+                "Users cannot review licensing terms or verify what data is sent for validation."
+            ),
+        ))
+
+    # Detect payment integration hidden in obfuscated code
+    paypal_refs = len(re.findall(r'paypal', source, re.IGNORECASE))
+    stripe_refs = len(re.findall(r'stripe', source, re.IGNORECASE))
+    if paypal_refs >= 5 or stripe_refs >= 5:
+        provider = "PayPal" if paypal_refs > stripe_refs else "Stripe"
+        count = max(paypal_refs, stripe_refs)
+        findings.append(Finding(
+            severity=Severity.HIGH,
+            category="hidden_payment",
+            file=filepath,
+            line=1,
+            description=(
+                f"{provider} payment integration hidden in obfuscated code ({count} references). "
+                "Payment processing code should be transparent and auditable."
+            ),
+        ))
+
+    # Detect iframe injection in obfuscated code
+    iframe_refs = len(re.findall(r'\biframe\b', source, re.IGNORECASE))
+    if iframe_refs >= 3:
+        findings.append(Finding(
+            severity=Severity.MEDIUM,
+            category="iframe_injection",
+            file=filepath,
+            line=1,
+            description=(
+                f"Iframe references in obfuscated code ({iframe_refs} occurrences). "
+                "Hidden iframes may load external content or phishing pages."
+            ),
+        ))
 
     return findings
 

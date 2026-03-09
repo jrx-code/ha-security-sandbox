@@ -266,6 +266,10 @@ function getSuggestedFix(f) {
         network: 'Sprawdź czy połączenia sieciowe są konieczne i bezpieczne',
         file_access: 'Ogranicz dostęp do plików; użyj Path z walidacją ścieżek',
         credential: 'Przenieś sekrety do zmiennych środowiskowych lub vault',
+        hidden_paywall: 'Komponent zawiera ukryty system licencji — nie można zweryfikować warunków',
+        hidden_payment: 'Płatności ukryte w obfuskowanym kodzie — brak audytowalności',
+        iframe_injection: 'Ukryte iframy mogą ładować zewnętrzną treść — zweryfikuj źródła',
+        payment: 'Nietypowa integracja płatności w komponencie HA — sprawdź cel',
     };
     return fixes[f.category] || 'Przejrzyj kod manualnie i oceń ryzyko';
 }

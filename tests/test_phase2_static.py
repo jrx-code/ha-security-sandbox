@@ -463,3 +463,86 @@ class TestObfuscationDetection:
         findings = scan_js_file(f)
         exfil = [fi for fi in findings if fi.category == "data_exfiltration"]
         assert len(exfil) == 0
+
+    def test_hidden_paywall_detected(self, tmp_path):
+        """License/activation system in obfuscated code should be flagged."""
+        f = tmp_path / "paywall.js"
+        lines = [
+            "var _0x1111=1;var _0x2222=2;var _0x3333=3;",
+            "var _0x4444=4;var _0x5555=5;var _0x6666=6;",
+        ]
+        # Use words that match \blicense\b and \bactivation\b
+        for i in range(15):
+            lines.append(f"if(checkLicense('license')){{return license;}}")
+        for i in range(5):
+            lines.append(f"doActivation('activation');")
+        for i in range(3):
+            lines.append(f"var premium = true;")
+        f.write_text("\n".join(lines))
+        findings = scan_js_file(f)
+        paywall = [fi for fi in findings if fi.category == "hidden_paywall"]
+        assert len(paywall) == 1
+        assert paywall[0].severity == Severity.HIGH
+
+    def test_hidden_payment_detected(self, tmp_path):
+        """PayPal integration in obfuscated code should be flagged."""
+        f = tmp_path / "payment.js"
+        lines = [
+            "var _0x1111=1;var _0x2222=2;var _0x3333=3;",
+            "var _0x4444=4;var _0x5555=5;var _0x6666=6;",
+        ]
+        for i in range(10):
+            lines.append(f"var paypal_{i}='https://www.paypal.com/pay/{i}';")
+        f.write_text("\n".join(lines))
+        findings = scan_js_file(f)
+        payment = [fi for fi in findings if fi.category == "hidden_payment"]
+        assert len(payment) == 1
+        assert "PayPal" in payment[0].description
+
+    def test_iframe_injection_detected(self, tmp_path):
+        """Multiple iframe references in obfuscated code should be flagged."""
+        f = tmp_path / "iframe.js"
+        f.write_text(
+            "var _0x1111=1;var _0x2222=2;var _0x3333=3;"
+            "var _0x4444=4;var _0x5555=5;var _0x6666=6;"
+            "document.createElement('iframe');"
+            "el.innerHTML='<iframe src=\"x\"></iframe>';"
+            "var tag='iframe';\n"
+        )
+        findings = scan_js_file(f)
+        iframe = [fi for fi in findings if fi.category == "iframe_injection"]
+        assert len(iframe) == 1
+
+    def test_no_paywall_in_clean_code(self, tmp_path):
+        """Normal code with a few license mentions should not trigger paywall."""
+        f = tmp_path / "normal.js"
+        f.write_text(
+            "// MIT License\n"
+            "// Licensed under MIT\n"
+            "var license = 'MIT';\n"
+            "console.log('hello');\n"
+        )
+        findings = scan_js_file(f)
+        paywall = [fi for fi in findings if fi.category == "hidden_paywall"]
+        assert len(paywall) == 0
+
+    def test_paypal_regex_fallback(self, tmp_path):
+        """PayPal in code that falls back to regex should flag payment."""
+        f = tmp_path / "paypal_es2020.js"
+        # Use ES2020+ syntax to force regex fallback
+        f.write_text(
+            "const x = obj?.nested?.prop ?? 'default';\n"
+            "fetch('https://www.paypal.com/donate');\n"
+        )
+        findings = scan_js_file(f)
+        payment = [fi for fi in findings if fi.category == "payment"]
+        assert len(payment) >= 1
+        assert "PayPal" in payment[0].description
+
+    def test_iframe_createElement_regex(self, tmp_path):
+        """createElement('iframe') should be detected by regex fallback."""
+        f = tmp_path / "iframe_create.js"
+        f.write_text("var f = document.createElement('iframe');\nf.src='https://evil.com';\n")
+        findings = scan_js_file(f)
+        iframe = [fi for fi in findings if fi.category == "script_injection" and "iframe" in fi.description.lower()]
+        assert len(iframe) >= 1
