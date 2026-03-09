@@ -50,11 +50,15 @@ class TestCheckCVE:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "vulns": [
+            "results": [
                 {
-                    "id": "GHSA-1234-5678",
-                    "summary": "Test vulnerability in aiohttp",
-                    "severity": [],
+                    "vulns": [
+                        {
+                            "id": "GHSA-1234-5678",
+                            "summary": "Test vulnerability in aiohttp",
+                            "severity": [],
+                        }
+                    ]
                 }
             ]
         }
@@ -78,7 +82,7 @@ class TestCheckCVE:
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {"vulns": []}
+        mock_resp.json.return_value = {"results": [{"vulns": []}]}
 
         with patch("app.scanner.cve_lookup.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()

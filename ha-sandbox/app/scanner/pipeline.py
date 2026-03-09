@@ -11,7 +11,7 @@ from app.scanner.static_js import scan_js_repo
 from app.scanner.static_python import scan_python_repo
 from app.scanner.static_yaml import scan_yaml_repo
 from app.scanner.static_ha import scan_ha_repo
-from app.scanner.cve_lookup import check_cve
+from app.scanner.cve_lookup import check_cve, check_cve_repo
 from app.ai.ollama import ai_review
 from app.report.generator import generate_report
 from app.report.mqtt import publish_scan_result, publish_status
@@ -151,6 +151,12 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
             if cve_findings:
                 log.info("[%s] CVE lookup: %d vulnerabilities found", job.id, len(cve_findings))
                 job.findings.extend(cve_findings)
+
+        # Phase 1c: Repo-wide dependency scanning (requirements.txt, package.json, pyproject.toml)
+        repo_cve = await check_cve_repo(repo_path)
+        if repo_cve:
+            log.info("[%s] Repo dependency scan: %d findings", job.id, len(repo_cve))
+            job.findings.extend(repo_cve)
 
         # Phase 2: Static analysis
         job.status = ScanStatus.SCANNING
