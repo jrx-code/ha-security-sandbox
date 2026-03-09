@@ -1,11 +1,20 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.12.0-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-208%20passed-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
+
+## What's New (v0.9–0.12)
+
+- **v0.12** — Actionable findings: every description says what to do, not just what was found
+- **v0.11** — Full dependency scanning: npm, pip, pyproject.toml + 55 known malicious packages + OSV.dev batch CVE
+- **v0.10** — Structural YAML parser: automation flow injection, `choose/sequence` nesting, `!include` path traversal
+- **v0.9** — 90% noise reduction after testing on 50 HACS repos (804→13 findings on large repos)
+
+See [CHANGELOG](ha-sandbox/CHANGELOG.md) for full history.
 
 ## Why?
 
@@ -20,8 +29,9 @@ HACS components run with full access to your Home Assistant instance — they ca
 | **Python AST** | `eval()`, `exec()`, `subprocess`, `pickle`, `ctypes`, dynamic imports |
 | **Python Taint Flow** | User input (`config_entry.data`, `request.json`) flowing into dangerous sinks |
 | **JavaScript AST** | `innerHTML`, `eval()`, `document.cookie`, data exfiltration, obfuscated code |
-| **YAML/Jinja2** | `shell_command`, hardcoded secrets, unsafe HTTP, Jinja2 injection |
+| **YAML/Jinja2** | `shell_command`, hardcoded secrets, unsafe HTTP, Jinja2 injection, `service_template`, nested `choose/sequence` flow injection, `rest_command` HTTP, `!include` path traversal, secrets in comments |
 | **HA API Patterns** | Dynamic service injection, event bus abuse, auth access, unvalidated schemas |
+| **Dependencies** | Known CVEs (OSV.dev), malicious/typosquatting packages (PyPI + npm) |
 
 ### AI Review
 
@@ -32,7 +42,22 @@ LLM-powered security audit with structured scoring rubric (0-10 scale), per-find
 
 ### Dependency Scanning
 
-Checks `requirements.txt` against the [OSV.dev](https://osv.dev/) vulnerability database for known CVEs.
+Full dependency analysis across all package ecosystems:
+
+- **npm** — parses `package.json` (dependencies + devDependencies)
+- **pip** — auto-discovers all `requirements*.txt` files in repo
+- **pyproject.toml** — extracts `[project.dependencies]`
+- **OSV.dev batch API** — bulk CVE lookup (100 packages per request)
+- **Malicious package detection** — 30+ PyPI + 25+ npm known typosquatting/supply-chain packages (CRITICAL severity)
+
+### Actionable Findings
+
+Every finding follows the pattern: **What was detected → Why it's risky → What to do**.
+
+Instead of generic "investigate this code", you get specific remediation:
+- `eval()` → "replace with `JSON.parse()` or remove; if needed, verify input is sanitized"
+- `innerHTML` → "use `textContent` for plain text or sanitize with DOMPurify"
+- `hass.services.call()` → "check that domain and service arguments are constants, not from user input"
 
 ### Finding Deduplication
 
@@ -93,9 +118,9 @@ ha-sandbox/
 │   ├── scanner/          # Static analysis engines
 │   │   ├── static_python.py  # Python AST + taint tracking
 │   │   ├── static_js.py      # JavaScript AST (esprima) + regex fallback
-│   │   ├── static_yaml.py    # YAML/Jinja2 patterns
+│   │   ├── static_yaml.py    # YAML/Jinja2 structural parser + automation flow analysis
 │   │   ├── static_ha.py      # HA API pattern validator
-│   │   ├── cve_lookup.py     # OSV.dev dependency scanning
+│   │   ├── cve_lookup.py     # OSV.dev CVE + malicious package detection (npm, pip, pyproject)
 │   │   ├── pipeline.py       # Orchestrator + deduplication
 │   │   ├── fetch.py          # Git clone + manifest parsing
 │   │   └── hacs_list.py      # HACS WebSocket component listing
@@ -114,8 +139,12 @@ ha-sandbox/
 ### Scan Pipeline
 
 ```
-Clone repo → Parse manifest → CVE lookup → Static analysis (5 scanners)
-    → AI review → Deduplicate findings → Generate report → MQTT publish
+Clone repo → Parse manifest
+    → Phase 1a: CVE lookup (manifest deps)
+    → Phase 1b: Static analysis (5 scanners)
+    → Phase 1c: Repo-wide dependency scan (npm, pip, pyproject.toml)
+    → Phase 2: AI review
+    → Deduplicate findings → Filter whitelist → Generate report → MQTT publish
 ```
 
 ## API
@@ -157,14 +186,15 @@ pip install -r ha-sandbox/requirements.txt
 cd ha-sandbox && python -m pytest tests/ -q
 ```
 
-**208 tests** across 11 suites covering all pipeline phases:
+**265 tests** across 14 suites covering all pipeline phases:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | Phase 1 — Fetch & Parse | 15 | Clone, manifest detection, component types |
 | Phase 2 — Static (Python) | 23 | AST patterns, taint flow, dangerous calls |
-| Phase 2 — Static (JS) | 18 | AST + regex, XSS, eval, exfiltration, obfuscation |
+| Phase 2 — Static (JS) | 18 | AST + regex, XSS, eval, exfiltration, obfuscation, noise reduction |
 | Phase 2 — YAML | 10 | Shell commands, secrets, Jinja2 injection |
+| Phase 2 — YAML Enhanced | 22 | Structural parsing, automation flow injection, !include, choose/sequence |
 | Phase 2 — HA Patterns | 11 | Dynamic services, event bus, auth, schemas |
 | Phase 2 — Batch | 13 | Queue, progress, SQLite persistence |
 | Phase 2 — Dedup | 10 | Category aliases, severity merge, taint merge |
@@ -174,6 +204,7 @@ cd ha-sandbox && python -m pytest tests/ -q
 | Phase 7 — Pipeline | 5 | End-to-end integration |
 | Code Learning | 25 | Fingerprinting, baseline, whitelist, reputation |
 | CVE Lookup | 9 | OSV.dev queries, version matching |
+| Dependency Scanner | 21 | npm, pip, pyproject.toml, malicious packages, batch CVE |
 | Storage | 8 | SQLite CRUD, migrations |
 
 ## Security Scoring
