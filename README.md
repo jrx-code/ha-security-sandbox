@@ -1,8 +1,8 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-178%20passed-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-208%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
@@ -132,6 +132,23 @@ Clone repo → Parse manifest → CVE lookup → Static analysis (5 scanners)
 | `GET` | `/api/report/{id}/csv` | Export report as CSV |
 | `GET` | `/api/report/{id}/html` | Export report as HTML |
 | `GET` | `/api/hacs/installed` | List installed HACS components |
+| `POST` | `/api/whitelist` | Add finding to whitelist (false positive) |
+| `DELETE` | `/api/whitelist/{hash}` | Remove whitelist entry |
+| `GET` | `/api/whitelist` | List all whitelisted patterns |
+| `GET` | `/api/reputation/{domain}` | Get component reputation (trend, history) |
+| `GET` | `/api/reputation` | Get all component reputations |
+
+## Code Learning
+
+The scanner learns from accumulated scan data to provide better results over time:
+
+| Module | What it does |
+|--------|-------------|
+| **L.1 Pattern Fingerprinting** | Extracts structural fingerprints (imports, HA APIs, network domains, file types) and tracks changes across versions |
+| **L.2 Baseline / Norm Database** | Computes statistical profile from 10+ scans; flags components that deviate >2σ from the norm |
+| **L.3 Whitelist / False Positives** | "Ignoruj" button in UI marks findings as false positives; whitelisted patterns are filtered on re-scan |
+| **L.4 Reputation Score** | Tracks safety score trends across versions with ↑/↓/→ indicators; builds component reputation |
+| **L.5 Cross-Component Intelligence** *(planned)* | Compare components against known-good patterns; detect supply chain risks |
 
 ## Testing
 
@@ -140,13 +157,13 @@ pip install -r ha-sandbox/requirements.txt
 cd ha-sandbox && python -m pytest tests/ -q
 ```
 
-**178 tests** across 10 suites covering all pipeline phases:
+**208 tests** across 11 suites covering all pipeline phases:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | Phase 1 — Fetch & Parse | 15 | Clone, manifest detection, component types |
 | Phase 2 — Static (Python) | 23 | AST patterns, taint flow, dangerous calls |
-| Phase 2 — Static (JS) | 13 | AST + regex, XSS, eval, exfiltration |
+| Phase 2 — Static (JS) | 18 | AST + regex, XSS, eval, exfiltration, obfuscation |
 | Phase 2 — YAML | 10 | Shell commands, secrets, Jinja2 injection |
 | Phase 2 — HA Patterns | 11 | Dynamic services, event bus, auth, schemas |
 | Phase 2 — Batch | 13 | Queue, progress, SQLite persistence |
@@ -155,7 +172,8 @@ cd ha-sandbox && python -m pytest tests/ -q
 | Phase 5 — Reports | 12 | JSON, CSV, HTML export, MQTT discovery |
 | Phase 6 — API | 8 | REST endpoints, error responses |
 | Phase 7 — Pipeline | 5 | End-to-end integration |
-| CVE Lookup | 8 | OSV.dev queries, version matching |
+| Code Learning | 25 | Fingerprinting, baseline, whitelist, reputation |
+| CVE Lookup | 9 | OSV.dev queries, version matching |
 | Storage | 8 | SQLite CRUD, migrations |
 
 ## Security Scoring
@@ -167,6 +185,17 @@ cd ha-sandbox && python -m pytest tests/ -q
 | 5-6 | **CAUTION** | Moderate risks requiring review |
 | 3-4 | **CAUTION** | Significant risks present |
 | 0-2 | **DANGER** | Critical — actively dangerous patterns |
+
+## Future Plans
+
+| Priority | Feature | Description |
+|----------|---------|-------------|
+| **High** | L.5 Cross-Component Intelligence | Compare components against known-good fingerprints; detect supply chain anomalies and typosquatting |
+| **High** | Scheduled re-scans | Periodically re-scan installed components to detect upstream changes |
+| **Medium** | HACS webhook integration | Auto-scan components on HACS install/update events |
+| **Medium** | Grafana dashboard | Visualize scan trends, reputation history, and baseline deviations |
+| **Low** | Multi-user whitelist | Per-user whitelist with shared/global rules |
+| **Low** | SBOM export | Software Bill of Materials in CycloneDX/SPDX format |
 
 ## Contributing
 

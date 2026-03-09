@@ -4,6 +4,7 @@ import logging
 import uuid
 from pathlib import Path
 
+from app import storage
 from app.models import ComponentType, Finding, ScanJob, ScanStatus, Severity
 from app.scanner.fetch import fetch_and_parse
 from app.scanner.static_js import scan_js_repo
@@ -14,6 +15,9 @@ from app.scanner.cve_lookup import check_cve
 from app.ai.ollama import ai_review
 from app.report.generator import generate_report
 from app.report.mqtt import publish_scan_result, publish_status
+from app.learning.fingerprint import extract_fingerprint, fingerprint_diff
+from app.learning.baseline import compute_baseline, check_deviations
+from app.learning.reputation import record_scan
 
 log = logging.getLogger(__name__)
 
@@ -164,6 +168,51 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         job.findings = deduplicate_findings(job.findings)
         if before_dedup != len(job.findings):
             log.info("[%s] Dedup: %d → %d findings", job.id, before_dedup, len(job.findings))
+
+        # Filter whitelisted findings (L.3)
+        before_wl = len(job.findings)
+        job.findings = [
+            f for f in job.findings
+            if not storage.is_whitelisted(f.category, f.file, f.description)
+        ]
+        if before_wl != len(job.findings):
+            log.info("[%s] Whitelist: %d → %d findings", job.id, before_wl, len(job.findings))
+
+        # Learning phase (L.1, L.2, L.4)
+        domain = job.manifest.domain if job.manifest else ""
+        version = job.manifest.version if job.manifest else ""
+        try:
+            # L.1: Extract and store fingerprint
+            fp = extract_fingerprint(repo_path, domain=domain, repo_url=job.repo_url)
+            storage.save_fingerprint(job.id, fp)
+
+            # Check for fingerprint changes vs previous scan
+            prev_fp = storage.get_last_fingerprint(domain=domain, repo_url=job.repo_url)
+            if prev_fp and prev_fp["fingerprint_hash"] != fp["fingerprint_hash"]:
+                changes = fingerprint_diff(prev_fp, fp)
+                if changes:
+                    log.info("[%s] Fingerprint changed: %s", job.id, changes)
+
+            # L.2: Check deviations from baseline
+            conn = storage.get_conn()
+            deviations = check_deviations(conn, fp, job.ai_score, len(job.findings))
+            if deviations:
+                log.info("[%s] Baseline deviations: %s", job.id,
+                         [f"{d['label']} ({d['direction']} by {d['z_score']}σ)" for d in deviations])
+
+            # L.4: Record in scan history for reputation tracking
+            record_scan(conn, domain, job.repo_url, version,
+                        job.ai_score, len(job.findings),
+                        fingerprint_hash=fp.get("fingerprint_hash", ""),
+                        total_lines=fp.get("total_lines", 0),
+                        py_files=fp.get("py_files", 0),
+                        js_files=fp.get("js_files", 0),
+                        network_domain_count=len(fp.get("network_domains", [])))
+
+            # L.2: Recompute baseline periodically
+            compute_baseline(conn)
+        except Exception as e:
+            log.warning("[%s] Learning phase error (non-fatal): %s", job.id, e)
 
         # Phase 5: Report
         job.status = ScanStatus.DONE
