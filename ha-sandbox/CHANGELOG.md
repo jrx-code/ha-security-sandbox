@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.7.0] - 2026-03-09
+
+### Added
+- JavaScript AST parser using esprima with regex fallback for ES2020+
+- Python taint tracking — data flow analysis from user input to dangerous sinks
+- HA API pattern validator — detects risky hass.services, event bus, auth access
+- Batch scanning with SQLite-backed queue and progress tracking
+- Report export: CSV and standalone HTML (print/PDF ready)
+- Finding deduplication with category aliases and severity merge
+- Structured AI prompting with scoring rubric, few-shot examples, confidence scores
+
+## [0.6.0] - 2026-03-09
+
+### Added
+- YAML/Jinja2 scanner (shell_command, hardcoded secrets, unsafe HTTP, injection)
+- CVE database lookup via OSV.dev for dependency scanning
+- SQLite job persistence (survives restarts)
+- MQTT scans_total counter (persisted across restarts)
+
+### Fixed
+- MQTT TLS connection with proper certificate verification
+
 ## [0.5.1] - 2026-03-07
 
 ### Fixed
