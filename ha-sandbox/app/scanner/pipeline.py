@@ -9,6 +9,7 @@ from app.scanner.fetch import fetch_and_parse
 from app.scanner.static_js import scan_js_repo
 from app.scanner.static_python import scan_python_repo
 from app.scanner.static_yaml import scan_yaml_repo
+from app.scanner.static_ha import scan_ha_repo
 from app.scanner.cve_lookup import check_cve
 from app.ai.ollama import ai_review
 from app.report.generator import generate_report
@@ -61,6 +62,13 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         if yaml_findings:
             log.info("[%s] YAML scanner: %d findings", job.id, len(yaml_findings))
             job.findings.extend(yaml_findings)
+
+        # HA API pattern scan (integrations only)
+        if comp_type in (ComponentType.INTEGRATION, ComponentType.PYTHON_SCRIPT, ComponentType.UNKNOWN):
+            ha_findings = scan_ha_repo(repo_path)
+            if ha_findings:
+                log.info("[%s] HA API scanner: %d findings", job.id, len(ha_findings))
+                job.findings.extend(ha_findings)
 
         # Phase 4: AI review
         job.status = ScanStatus.AI_REVIEW
