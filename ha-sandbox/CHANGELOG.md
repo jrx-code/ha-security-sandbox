@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0] - 2026-03-09
+
+### Added
+- **Code Learning** — 4-module learning pipeline:
+  - L.1 Pattern Fingerprinting — extract structural fingerprints (imports, HA APIs, network domains, file types)
+  - L.2 Baseline / Norm Database — statistical profiling from scan history, deviation detection (z-score > 2σ)
+  - L.3 Whitelist / False Positives — "Ignoruj" button in UI, pattern-based whitelist with category+file matching
+  - L.4 Reputation Score — track safety score trends across versions with ↑/↓/→ trend indicators
+- Reputation display in report modal (scan count, average score, trend)
+- CSV/HTML export buttons in report modal
+- REST API endpoints: `/api/whitelist` (CRUD), `/api/reputation` (per-domain + all)
+- 25 new tests covering all learning modules (208 total)
+
+### Changed
+- Scan pipeline now filters whitelisted findings before report generation
+- Fingerprint and reputation data recorded automatically after each scan
+
 ## [0.7.0] - 2026-03-09
 
 ### Added

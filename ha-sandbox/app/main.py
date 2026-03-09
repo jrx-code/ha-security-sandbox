@@ -311,6 +311,54 @@ async def api_scan_installed(request: Request, background_tasks: BackgroundTasks
     return JSONResponse(content={"batch_id": batch_id, "total": len(repos)})
 
 
+# --- Whitelist API (L.3) ---
+
+@app.post("/api/whitelist")
+async def api_whitelist_add(request: Request):
+    """Add a finding to the whitelist (mark as false positive)."""
+    data = await request.json()
+    category = data.get("category", "")
+    file_pattern = data.get("file_pattern", "")
+    description = data.get("description", "")
+    reason = data.get("reason", "")
+    if not category:
+        return JSONResponse(content={"error": "category required"}, status_code=400)
+    ph = storage.add_whitelist(category, file_pattern, description, reason)
+    return JSONResponse(content={"ok": True, "pattern_hash": ph})
+
+
+@app.delete("/api/whitelist/{pattern_hash}")
+async def api_whitelist_remove(pattern_hash: str):
+    ok = storage.remove_whitelist(pattern_hash)
+    if not ok:
+        return JSONResponse(content={"error": "not found"}, status_code=404)
+    return JSONResponse(content={"ok": True})
+
+
+@app.get("/api/whitelist")
+async def api_whitelist_list():
+    return JSONResponse(content=storage.get_whitelist())
+
+
+# --- Reputation API (L.4) ---
+
+@app.get("/api/reputation/{domain}")
+async def api_reputation(domain: str):
+    from app.learning.reputation import get_reputation
+    conn = storage.get_conn()
+    rep = get_reputation(conn, domain=domain)
+    if not rep:
+        return JSONResponse(content={"error": "no history"}, status_code=404)
+    return JSONResponse(content=rep)
+
+
+@app.get("/api/reputation")
+async def api_reputation_all():
+    from app.learning.reputation import get_all_reputations
+    conn = storage.get_conn()
+    return JSONResponse(content=get_all_reputations(conn))
+
+
 @app.get("/api/system")
 async def api_system_info():
     repos_dir = Path(app_settings.get("repos_dir", "/data/repos"))

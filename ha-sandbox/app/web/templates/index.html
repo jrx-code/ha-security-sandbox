@@ -267,13 +267,26 @@ async function showReport(id) {
     const r = await resp.json();
     document.getElementById('modal-title').textContent = r.name + ' — Score: ' + (r.ai_score || 'N/A') + '/10';
     let html = '<p style="margin-bottom:12px">' + (r.ai_summary || 'No AI summary') + '</p>';
+    // Reputation trend (L.4)
+    try {
+        const domain = r.name.replace(/[^a-z0-9_-]/gi, '').toLowerCase();
+        const repResp = await fetch(BASE + '/api/reputation/' + encodeURIComponent(domain));
+        if (repResp.ok) {
+            const rep = await repResp.json();
+            const trendColor = rep.trend === 'improving' ? 'var(--safe)' : rep.trend === 'declining' ? 'var(--danger)' : 'var(--text-muted)';
+            html += `<div style="background:rgba(0,0,0,0.2);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:0.9em">
+                <strong>Reputacja:</strong> ${rep.scans_count} skanów, średnia: ${rep.avg_score}/10
+                <span style="color:${trendColor};font-weight:bold;margin-left:8px">${rep.trend_symbol} ${rep.trend}</span>
+            </div>`;
+        }
+    } catch(e) { /* no reputation data yet */ }
     html += '<h4 style="margin:12px 0 8px">Findings (' + r.findings.length + ')</h4>';
     const sevOrder = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
     r.findings.sort((a, b) => (sevOrder[a.severity] ?? 5) - (sevOrder[b.severity] ?? 5));
-    r.findings.forEach(f => {
+    r.findings.forEach((f, idx) => {
         const proposal = getProposal(f);
         const fix = getSuggestedFix(f);
-        html += `<div class="finding finding-${f.severity}">
+        html += `<div class="finding finding-${f.severity}" id="finding-${idx}">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
                 <div style="flex:1">
                     <span class="sev">${f.severity}</span> [${f.category}]
@@ -283,10 +296,18 @@ async function showReport(id) {
                 <div style="min-width:220px;font-size:0.85em">
                     <div><strong>Propozycja:</strong> <span class="badge ${proposal.cls}" style="font-size:0.9em">${proposal.label}</span></div>
                     <div style="margin-top:4px;color:var(--text-muted)"><strong>Naprawa:</strong> ${fix}</div>
+                    <button class="btn btn-sm" style="margin-top:6px;background:var(--primary);font-size:0.8em"
+                        onclick="ignoreFinding('${f.category}', '${f.file}', \`${f.description.replace(/`/g,"'").substring(0,200)}\`, this)">
+                        Ignoruj
+                    </button>
                 </div>
             </div>
         </div>`;
     });
+    html += `<div style="margin-top:16px;display:flex;gap:8px">
+        <a href="${BASE}/api/report/${id}/csv" class="btn btn-sm" style="text-decoration:none">CSV</a>
+        <a href="${BASE}/api/report/${id}/html" target="_blank" class="btn btn-sm" style="text-decoration:none;background:var(--primary)">HTML</a>
+    </div>`;
     document.getElementById('modal-body').innerHTML = html;
     document.getElementById('modal').classList.add('open');
 }
@@ -296,6 +317,25 @@ async function clearResults() {
     await fetch(BASE + '/api/reports/clear', {method:'POST'});
     await fetch(BASE + '/api/cache/clear', {method:'POST'});
     location.reload();
+}
+
+async function ignoreFinding(category, file, description, btn) {
+    const reason = prompt('Powód ignorowania (opcjonalnie):') ?? '';
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+        await fetch(BASE + '/api/whitelist', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({category, file_pattern: file, description, reason}),
+        });
+        btn.textContent = 'Zignorowano';
+        btn.style.background = 'var(--safe)';
+        btn.closest('.finding').style.opacity = '0.4';
+    } catch (e) {
+        btn.textContent = 'Błąd';
+        btn.style.background = 'var(--danger)';
+    }
 }
 
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
