@@ -205,6 +205,18 @@ def scan_ha_patterns(filepath: Path) -> list[Finding]:
     return visitor.findings
 
 
+def _cap_findings_per_file(findings: list[Finding], max_per_cat: int = 3) -> list[Finding]:
+    """Cap findings to max_per_cat per category per file to reduce noise."""
+    counts: dict[tuple[str, str], int] = {}
+    capped: list[Finding] = []
+    for f in findings:
+        key = (f.file, f.category)
+        counts[key] = counts.get(key, 0) + 1
+        if counts[key] <= max_per_cat:
+            capped.append(f)
+    return capped
+
+
 def scan_ha_repo(repo_path: Path) -> list[Finding]:
     """Scan all Python files in a repo for HA API patterns."""
     findings = []
@@ -213,4 +225,4 @@ def scan_ha_repo(repo_path: Path) -> list[Finding]:
         if any(skip in rel.split("/") for skip in ["tests", ".venv", "node_modules", "__pycache__"]):
             continue
         findings.extend(scan_ha_patterns(pyfile))
-    return findings
+    return _cap_findings_per_file(findings)
