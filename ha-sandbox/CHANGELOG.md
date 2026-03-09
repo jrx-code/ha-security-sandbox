@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.12.0] - 2026-03-09
+
+### Improved (Actionable Finding Descriptions)
+- **JS scanner** — all descriptions rewritten: eval→JSON.parse, innerHTML→textContent/DOMPurify, fetch→verify URL, localStorage→check stored data
+- **Python scanner** — subprocess, pickle, exec, os.system, requests descriptions now include specific remediation
+- **HA scanner** — services.call, bus.fire, auth access, dynamic entity descriptions include attack scenarios
+- **Pattern**: "What was detected → Why it's risky → What to do" across all scanners
+- No new tests needed (descriptions only, 265 tests still passing)
+
 ## [0.11.0] - 2026-03-09
 
 ### Added (Dependency Scanner Enhancement — 3/5 → 5/5)

@@ -25,26 +25,28 @@ log = logging.getLogger(__name__)
 _HASS_DANGEROUS_METHODS: dict[tuple[str, str], tuple[Severity, str, str]] = {
     ("services", "call"): (
         Severity.MEDIUM, "ha_api_risk",
-        "hass.services.call() — verify service name is not user-controlled",
+        "hass.services.call() — check that domain and service arguments are constants, not from user input or config_entry.data",
     ),
     ("services", "async_call"): (
         Severity.MEDIUM, "ha_api_risk",
-        "hass.services.async_call() — verify service name is not user-controlled",
+        "hass.services.async_call() — check that domain and service arguments are constants, not from user input or config_entry.data",
     ),
     ("bus", "fire"): (
         Severity.MEDIUM, "ha_event_injection",
-        "hass.bus.fire() can inject events into HA event bus",
+        "hass.bus.fire() injects events — verify event_type is a constant; malicious events can trigger automations",
     ),
     ("bus", "async_fire"): (
         Severity.MEDIUM, "ha_event_injection",
-        "hass.bus.async_fire() can inject events into HA event bus",
+        "hass.bus.async_fire() injects events — verify event_type is a constant; malicious events can trigger automations",
     ),
 }
 
 # Risky attribute access on hass object
 _HASS_RISKY_ACCESS: dict[str, tuple[Severity, str, str]] = {
-    "auth": (Severity.HIGH, "ha_auth_access", "Direct access to hass.auth — authentication system"),
-    "config": (Severity.LOW, "ha_config_access", "Access to hass.config — HA configuration"),
+    "auth": (Severity.HIGH, "ha_auth_access",
+             "Direct access to hass.auth — can read/modify users and tokens; components should use config_entry auth flow instead"),
+    "config": (Severity.LOW, "ha_config_access",
+               "Access to hass.config — reads HA configuration (location, units, URL); verify no sensitive data is exposed externally"),
 }
 
 # Platform schema without proper validation
@@ -125,7 +127,7 @@ class HAASTVisitor(ast.NodeVisitor):
                     Severity.HIGH, "ha_dynamic_service",
                     f"Dynamic service {'domain' if i == 0 else 'name'} in "
                     f"hass.services.{'async_' if func.attr == 'async_call' else ''}call() "
-                    f"— potential service injection",
+                    f"— if value comes from user input/config, attacker can call any HA service (e.g. script.*, automation.trigger)",
                     node.lineno,
                 )
                 break
@@ -142,7 +144,8 @@ class HAASTVisitor(ast.NodeVisitor):
             if node.args and not isinstance(node.args[0], ast.Constant):
                 self._add(
                     Severity.MEDIUM, "ha_dynamic_entity",
-                    "Dynamic entity_id in hass.states.set() — verify controlled",
+                    "Dynamic entity_id in hass.states.set() — verify entity_id is from allowed list, not user input; "
+                    "attacker could overwrite arbitrary entity states",
                     node.lineno,
                 )
 

@@ -11,22 +11,34 @@ log = logging.getLogger(__name__)
 
 # Dangerous function calls
 DANGEROUS_CALLS = {
-    "eval": ("code_injection", Severity.CRITICAL, "eval() can execute arbitrary code"),
-    "exec": ("code_injection", Severity.CRITICAL, "exec() can execute arbitrary code"),
-    "compile": ("code_injection", Severity.MEDIUM, "compile() can create executable code"),
-    "__import__": ("code_injection", Severity.HIGH, "Dynamic import can load arbitrary modules"),
+    "eval": ("code_injection", Severity.CRITICAL,
+             "eval() executes arbitrary code — replace with ast.literal_eval() for data parsing or remove entirely"),
+    "exec": ("code_injection", Severity.CRITICAL,
+             "exec() executes arbitrary code — refactor to avoid; if loading plugins, use importlib with validation"),
+    "compile": ("code_injection", Severity.MEDIUM,
+                "compile() creates executable code objects — verify source string is not user-controlled"),
+    "__import__": ("code_injection", Severity.HIGH,
+                   "Dynamic __import__() can load arbitrary modules — use importlib.import_module() with allowed-list"),
 }
 
 # Dangerous module usage
 DANGEROUS_IMPORTS = {
-    "subprocess": ("command_execution", Severity.HIGH, "subprocess can execute system commands"),
-    "os.system": ("command_execution", Severity.CRITICAL, "os.system executes shell commands"),
-    "os.popen": ("command_execution", Severity.HIGH, "os.popen executes shell commands"),
-    "pickle": ("deserialization", Severity.HIGH, "pickle can execute arbitrary code during deserialization"),
-    "shelve": ("deserialization", Severity.MEDIUM, "shelve uses pickle internally"),
-    "marshal": ("deserialization", Severity.MEDIUM, "marshal can deserialize code objects"),
-    "ctypes": ("native_code", Severity.HIGH, "ctypes allows calling native code"),
-    "webbrowser": ("data_exfiltration", Severity.MEDIUM, "Can open URLs in browser"),
+    "subprocess": ("command_execution", Severity.HIGH,
+                   "subprocess executes system commands — ensure arguments are not user-controlled; avoid shell=True"),
+    "os.system": ("command_execution", Severity.CRITICAL,
+                  "os.system() runs shell commands — replace with subprocess.run() with explicit args list (no shell)"),
+    "os.popen": ("command_execution", Severity.HIGH,
+                 "os.popen() runs shell commands — replace with subprocess.run() with explicit args list"),
+    "pickle": ("deserialization", Severity.HIGH,
+               "pickle executes code during deserialization — never unpickle untrusted data; use json instead"),
+    "shelve": ("deserialization", Severity.MEDIUM,
+               "shelve uses pickle internally — avoid for untrusted data; use json or sqlite3 instead"),
+    "marshal": ("deserialization", Severity.MEDIUM,
+                "marshal can deserialize code objects — avoid for untrusted data"),
+    "ctypes": ("native_code", Severity.HIGH,
+               "ctypes calls native code directly — verify no user input reaches native function arguments"),
+    "webbrowser": ("data_exfiltration", Severity.MEDIUM,
+                   "webbrowser can open arbitrary URLs — verify URL is not user-controlled; unusual in HA components"),
 }
 
 # Network-related modules
@@ -37,12 +49,18 @@ NETWORK_MODULES = {
 
 # Suspicious string patterns in code
 SUSPICIOUS_PATTERNS = [
-    ("base64.b64decode", Severity.MEDIUM, "obfuscation", "Base64 decode may hide payloads"),
-    ("codecs.decode", Severity.MEDIUM, "obfuscation", "Codec decode may hide payloads"),
-    ("analytics", Severity.LOW, "telemetry", "Possible analytics/telemetry"),
-    ("google-analytics", Severity.MEDIUM, "telemetry", "Google Analytics tracking"),
-    ("sentry", Severity.LOW, "telemetry", "Sentry error tracking"),
-    ("tracking_url", Severity.LOW, "telemetry", "Possible tracking URL"),
+    ("base64.b64decode", Severity.MEDIUM, "obfuscation",
+     "Base64 decode — check what is being decoded; may hide URLs, tokens, or malicious payloads"),
+    ("codecs.decode", Severity.MEDIUM, "obfuscation",
+     "Codec decode — check encoding type (rot13, hex); may be used to hide sensitive strings"),
+    ("analytics", Severity.LOW, "telemetry",
+     "Analytics reference — verify no user data is sent to third-party analytics services"),
+    ("google-analytics", Severity.MEDIUM, "telemetry",
+     "Google Analytics — tracks user behavior; should not be in HA components; remove tracking code"),
+    ("sentry", Severity.LOW, "telemetry",
+     "Sentry error tracking — sends error reports externally; verify no sensitive HA data in reports"),
+    ("tracking_url", Severity.LOW, "telemetry",
+     "Tracking URL reference — verify URL is for legitimate functionality, not user tracking"),
 ]
 
 # ──────────────────────────────────────────────────────────────────────
