@@ -2,7 +2,7 @@ name: "HA Security Sandbox"
 version: "0.7.0"
 slug: ha_security_sandbox
 description: "Security scanner for Home Assistant custom components — static analysis + AI review"
-url: "https://gitlab.iwanus.eu/jiwanus/ha-sandbox"
+url: "https://github.com/jrx-code/ha-security-sandbox"
 arch:
   - amd64
   - aarch64
