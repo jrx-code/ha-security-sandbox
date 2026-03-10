@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.1] - 2026-03-10
+
+### Fixed
+- **AppArmor install error** — removed custom `apparmor.txt` profile that caused `Can't load profile` / `exit status 1` on HAOS (AppArmor 3.1.2); Supervisor now uses default Docker AppArmor profile
+- Reproduced and verified on fresh HAOS 14.2 KVM VM
+
 ## [0.12.0] - 2026-03-09
 
 ### Improved (Actionable Finding Descriptions)

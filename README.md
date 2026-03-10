@@ -1,6 +1,6 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.12.0-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.12.1-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
