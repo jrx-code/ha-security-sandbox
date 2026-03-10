@@ -19,6 +19,7 @@ from app.report.generator import export_csv, export_html, export_pdf, load_all_r
 from app.report.mqtt import disconnect, publish_discovery, publish_status
 from app.scanner.hacs_list import fetch_installed_hacs, repo_to_url, test_ha_connection
 from app.scanner.pipeline import run_scan
+from app import scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -49,7 +50,12 @@ async def lifespan(app: FastAPI):
         publish_status("idle")
     except Exception as e:
         log.warning("MQTT init failed (non-fatal): %s", e)
+    # Start scheduled scans if enabled
+    cfg = app_settings.load()
+    if cfg.get("schedule_enabled"):
+        scheduler.start(cfg.get("schedule_interval_hours", 24))
     yield
+    scheduler.stop()
     storage.close()
     disconnect()
 
@@ -386,6 +392,33 @@ async def api_reputation_all():
     return JSONResponse(content=get_all_reputations(conn))
 
 
+# --- Scheduler API ---
+
+@app.get("/api/scheduler")
+async def api_scheduler_status():
+    return JSONResponse(content=scheduler.status())
+
+
+@app.post("/api/scheduler")
+async def api_scheduler_update(request: Request):
+    """Enable/disable scheduled scans.
+
+    Body: {"enabled": true/false, "interval_hours": 24}
+    """
+    data = await request.json()
+    enabled = data.get("enabled", False)
+    interval = float(data.get("interval_hours", 24))
+
+    app_settings.save({"schedule_enabled": enabled, "schedule_interval_hours": interval})
+
+    if enabled and interval > 0:
+        scheduler.start(interval)
+    else:
+        scheduler.stop()
+
+    return JSONResponse(content={"ok": True, **scheduler.status()})
+
+
 @app.get("/api/system")
 async def api_system_info():
     repos_dir = Path(app_settings.get("repos_dir", "/data/repos"))
@@ -398,4 +431,5 @@ async def api_system_info():
         "reports": report_count,
         "repos_cached": repo_count,
         "cache_size_mb": round(repo_size / 1024 / 1024, 1),
+        "scheduler": scheduler.status(),
     })
