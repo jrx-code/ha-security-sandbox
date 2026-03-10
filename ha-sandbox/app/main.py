@@ -392,6 +392,111 @@ async def api_reputation_all():
     return JSONResponse(content=get_all_reputations(conn))
 
 
+# --- Diff/Delta API ---
+
+@app.get("/api/diff/{domain}")
+async def api_diff_domain(domain: str):
+    """Compare the last two scans for a domain, showing what changed."""
+    from app.learning.fingerprint import fingerprint_diff
+    conn = storage.get_conn()
+    rows = conn.execute(
+        "SELECT * FROM component_fingerprints WHERE domain = ? ORDER BY created_at DESC LIMIT 2",
+        (domain,),
+    ).fetchall()
+    if len(rows) < 2:
+        return JSONResponse(content={"error": "Need at least 2 scans to compare"}, status_code=404)
+
+    new_fp = _fp_from_row(rows[0])
+    old_fp = _fp_from_row(rows[1])
+    changes = fingerprint_diff(old_fp, new_fp)
+
+    # Also compare findings count from scan_history
+    history = conn.execute(
+        "SELECT score, findings_count, scanned_at FROM scan_history WHERE domain = ? ORDER BY scanned_at DESC LIMIT 2",
+        (domain,),
+    ).fetchall()
+    score_delta = None
+    if len(history) >= 2:
+        score_delta = {
+            "old_score": history[1]["score"],
+            "new_score": history[0]["score"],
+            "old_findings": history[1]["findings_count"],
+            "new_findings": history[0]["findings_count"],
+            "old_date": history[1]["scanned_at"],
+            "new_date": history[0]["scanned_at"],
+        }
+
+    return JSONResponse(content={
+        "domain": domain,
+        "fingerprint_changes": changes,
+        "score_delta": score_delta,
+        "old_hash": old_fp.get("fingerprint_hash", ""),
+        "new_hash": new_fp.get("fingerprint_hash", ""),
+    })
+
+
+@app.get("/api/diff")
+async def api_diff_all():
+    """List all domains/repos that have fingerprint changes between last 2 scans."""
+    conn = storage.get_conn()
+    domains = conn.execute(
+        "SELECT DISTINCT domain FROM component_fingerprints WHERE domain != '' ORDER BY domain"
+    ).fetchall()
+    repos = conn.execute(
+        "SELECT DISTINCT repo_url FROM component_fingerprints WHERE domain = '' AND repo_url != '' ORDER BY repo_url"
+    ).fetchall()
+
+    changed = []
+    from app.learning.fingerprint import fingerprint_diff
+
+    for row in domains:
+        d = row["domain"]
+        fps = conn.execute(
+            "SELECT * FROM component_fingerprints WHERE domain = ? ORDER BY created_at DESC LIMIT 2",
+            (d,),
+        ).fetchall()
+        if len(fps) < 2:
+            continue
+        new_fp = _fp_from_row(fps[0])
+        old_fp = _fp_from_row(fps[1])
+        if new_fp.get("fingerprint_hash") != old_fp.get("fingerprint_hash"):
+            changes = fingerprint_diff(old_fp, new_fp)
+            changed.append({"domain": d, "changes": changes})
+
+    for row in repos:
+        url = row["repo_url"]
+        fps = conn.execute(
+            "SELECT * FROM component_fingerprints WHERE repo_url = ? AND domain = '' ORDER BY created_at DESC LIMIT 2",
+            (url,),
+        ).fetchall()
+        if len(fps) < 2:
+            continue
+        new_fp = _fp_from_row(fps[0])
+        old_fp = _fp_from_row(fps[1])
+        if new_fp.get("fingerprint_hash") != old_fp.get("fingerprint_hash"):
+            changes = fingerprint_diff(old_fp, new_fp)
+            changed.append({"repo_url": url, "changes": changes})
+
+    return JSONResponse(content={"changed": changed, "total_tracked": len(domains) + len(repos)})
+
+
+def _fp_from_row(row) -> dict:
+    """Convert a SQLite row to a fingerprint dict."""
+    import json
+    return {
+        "domain": row["domain"],
+        "repo_url": row["repo_url"],
+        "fingerprint_hash": row["fingerprint_hash"],
+        "imports": json.loads(row["imports"]),
+        "ha_apis": json.loads(row["ha_apis"]),
+        "network_domains": json.loads(row["network_domains"]),
+        "file_types": json.loads(row["file_types"]),
+        "py_files": row["py_files"],
+        "js_files": row["js_files"],
+        "total_lines": row["total_lines"],
+    }
+
+
 # --- Scheduler API ---
 
 @app.get("/api/scheduler")
