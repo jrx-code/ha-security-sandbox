@@ -157,10 +157,10 @@
                     <td>
                         <strong>{{ r.name }}</strong>
                         {% if r.learning is defined and r.learning.deviations is defined and r.learning.deviations|length > 0 %}
-                        <span class="badge badge-caution" style="margin-left:6px;font-size:0.7em;vertical-align:middle" title="Odbiega od normy ({{ r.learning.deviations|length }} odchyleń)">Nietypowy</span>
+                        <span class="badge badge-caution" style="margin-left:6px;font-size:0.7em;vertical-align:middle" title="Deviates from norm ({{ r.learning.deviations|length }} deviations)">Atypical</span>
                         {% endif %}
                         {% if r.learning is defined and r.learning.fingerprint_changes is defined and r.learning.fingerprint_changes|length > 0 %}
-                        <span style="color:var(--accent);font-size:0.75em;margin-left:4px" title="Wykryto zmiany vs poprzedni skan">&#916;</span>
+                        <span style="color:var(--accent);font-size:0.75em;margin-left:4px" title="Changes detected vs previous scan">&#916;</span>
                         {% endif %}
                     </td>
                     <td>{{ r.component_type }}</td>
@@ -239,40 +239,40 @@ async function loadInstalled() {
 function getProposal(f) {
     // Critical/high code injection or command execution → must fix
     if (['critical','high'].includes(f.severity) && ['code_injection','command_execution'].includes(f.category))
-        return {label: 'Usuń / Napraw', cls: 'badge-danger'};
+        return {label: 'Remove / Fix', cls: 'badge-danger'};
     if (f.severity === 'critical')
-        return {label: 'Napraw', cls: 'badge-danger'};
+        return {label: 'Fix', cls: 'badge-danger'};
     if (f.severity === 'high' && ['deserialization','native_code','data_exfiltration'].includes(f.category))
-        return {label: 'Napraw', cls: 'badge-danger'};
+        return {label: 'Fix', cls: 'badge-danger'};
     if (f.severity === 'high')
-        return {label: 'Zbadaj', cls: 'badge-caution'};
+        return {label: 'Investigate', cls: 'badge-caution'};
     if (f.severity === 'medium')
-        return {label: 'Zbadaj', cls: 'badge-caution'};
+        return {label: 'Investigate', cls: 'badge-caution'};
     if (f.severity === 'low' && ['telemetry','tracking'].includes(f.category))
-        return {label: 'Zostaw / Usuń', cls: 'badge-safe'};
+        return {label: 'Keep / Remove', cls: 'badge-safe'};
     if (f.severity === 'low')
-        return {label: 'Zostaw', cls: 'badge-safe'};
-    return {label: 'Zostaw', cls: 'badge-safe'};
+        return {label: 'Keep', cls: 'badge-safe'};
+    return {label: 'Keep', cls: 'badge-safe'};
 }
 
 function getSuggestedFix(f) {
     const fixes = {
-        code_injection: 'Zamień eval()/exec() na ast.literal_eval() lub bezpieczny parser',
-        command_execution: 'Użyj subprocess z listą args zamiast shell=True; ogranicz komendy',
-        deserialization: 'Zamień pickle na json/msgpack; waliduj dane wejściowe',
-        native_code: 'Sprawdź czy ctypes jest niezbędny; rozważ alternatywę w czystym Pythonie',
-        data_exfiltration: 'Zweryfikuj docelowe URL-e; ogranicz dostęp sieciowy',
-        obfuscation: 'Sprawdź czy base64/codec jest używany do ukrywania payloadu',
-        telemetry: 'Opcjonalnie wyłącz telemetrię lub zweryfikuj zbierane dane',
-        network: 'Sprawdź czy połączenia sieciowe są konieczne i bezpieczne',
-        file_access: 'Ogranicz dostęp do plików; użyj Path z walidacją ścieżek',
-        credential: 'Przenieś sekrety do zmiennych środowiskowych lub vault',
-        hidden_paywall: 'Komponent zawiera ukryty system licencji — nie można zweryfikować warunków',
-        hidden_payment: 'Płatności ukryte w obfuskowanym kodzie — brak audytowalności',
-        iframe_injection: 'Ukryte iframy mogą ładować zewnętrzną treść — zweryfikuj źródła',
-        payment: 'Nietypowa integracja płatności w komponencie HA — sprawdź cel',
+        code_injection: 'Replace eval()/exec() with ast.literal_eval() or a safe parser',
+        command_execution: 'Use subprocess with args list instead of shell=True; restrict commands',
+        deserialization: 'Replace pickle with json/msgpack; validate input data',
+        native_code: 'Check if ctypes is necessary; consider a pure Python alternative',
+        data_exfiltration: 'Verify target URLs; restrict network access',
+        obfuscation: 'Check if base64/codec is used to hide payload',
+        telemetry: 'Optionally disable telemetry or verify collected data',
+        network: 'Check if network connections are necessary and secure',
+        file_access: 'Restrict file access; use Path with path validation',
+        credential: 'Move secrets to environment variables or vault',
+        hidden_paywall: 'Component contains hidden licensing system — cannot verify terms',
+        hidden_payment: 'Payments hidden in obfuscated code — not auditable',
+        iframe_injection: 'Hidden iframes may load external content — verify sources',
+        payment: 'Unusual payment integration in HA component — check purpose',
     };
-    return fixes[f.category] || 'Przejrzyj kod manualnie i oceń ryzyko';
+    return fixes[f.category] || 'Review code manually and assess risk';
 }
 
 async function showReport(id) {
@@ -288,7 +288,7 @@ async function showReport(id) {
             const rep = await repResp.json();
             const trendColor = rep.trend === 'improving' ? 'var(--safe)' : rep.trend === 'declining' ? 'var(--danger)' : 'var(--text-muted)';
             html += `<div style="background:rgba(0,0,0,0.2);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:0.9em">
-                <strong>Reputacja:</strong> ${rep.scans_count} skanów, średnia: ${rep.avg_score}/10
+                <strong>Reputation:</strong> ${rep.scans_count} scans, avg: ${rep.avg_score}/10
                 <span style="color:${trendColor};font-weight:bold;margin-left:8px">${rep.trend_symbol} ${rep.trend}</span>
             </div>`;
         }
@@ -300,16 +300,16 @@ async function showReport(id) {
         for (const [key, val] of Object.entries(ch)) {
             if (key === 'size') {
                 const color = val.change_pct > 0 ? 'var(--caution)' : 'var(--safe)';
-                chHtml += `<div><strong>Rozmiar kodu:</strong> ${val.old_lines} → ${val.new_lines} linii (<span style="color:${color}">${val.change_pct > 0 ? '+' : ''}${val.change_pct}%</span>)</div>`;
+                chHtml += `<div><strong>Code size:</strong> ${val.old_lines} → ${val.new_lines} lines (<span style="color:${color}">${val.change_pct > 0 ? '+' : ''}${val.change_pct}%</span>)</div>`;
             } else {
-                const label = {imports: 'Importy', ha_apis: 'API HA', network_domains: 'Domeny sieciowe'}[key] || key;
+                const label = {imports: 'Imports', ha_apis: 'HA APIs', network_domains: 'Network domains'}[key] || key;
                 if (val.added && val.added.length) chHtml += `<div><strong>${label}:</strong> <span style="color:var(--safe)">+ ${val.added.join(', ')}</span></div>`;
                 if (val.removed && val.removed.length) chHtml += `<div><strong>${label}:</strong> <span style="color:var(--danger)">− ${val.removed.join(', ')}</span></div>`;
             }
         }
         if (chHtml) {
             html += `<div style="background:rgba(136,192,208,0.1);border-left:3px solid var(--accent);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:12px;font-size:0.85em">
-                <strong>&#916; Zmiany vs poprzedni skan:</strong>
+                <strong>&#916; Changes vs previous scan:</strong>
                 ${chHtml}
             </div>`;
         }
@@ -319,10 +319,10 @@ async function showReport(id) {
         let devHtml = r.learning.deviations.map(d => {
             const color = d.direction === 'above' ? 'var(--caution)' : 'var(--safe)';
             const arrow = d.direction === 'above' ? '&#9650;' : '&#9660;';
-            return `<div><span style="color:${color}">${arrow}</span> <strong>${d.label}:</strong> ${d.value} (norma: ${d.mean} ± ${d.stddev}, odchylenie: ${d.z_score}σ)</div>`;
+            return `<div><span style="color:${color}">${arrow}</span> <strong>${d.label}:</strong> ${d.value} (norm: ${d.mean} ± ${d.stddev}, deviation: ${d.z_score}σ)</div>`;
         }).join('');
         html += `<div style="background:rgba(235,203,139,0.1);border-left:3px solid var(--caution);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:12px;font-size:0.85em">
-            <strong>&#9888; Odchylenia od normy:</strong>
+            <strong>&#9888; Deviations from norm:</strong>
             ${devHtml}
         </div>`;
     }
@@ -330,12 +330,12 @@ async function showReport(id) {
     if (r.learning && r.learning.fingerprint) {
         const fp = r.learning.fingerprint;
         let fpParts = [];
-        if (fp.total_lines) fpParts.push(`${fp.total_lines} linii`);
+        if (fp.total_lines) fpParts.push(`${fp.total_lines} lines`);
         if (fp.py_files) fpParts.push(`${fp.py_files} .py`);
         if (fp.js_files) fpParts.push(`${fp.js_files} .js`);
-        if (fp.imports_count) fpParts.push(`${fp.imports_count} importów`);
-        if (fp.ha_apis_count) fpParts.push(`${fp.ha_apis_count} API HA`);
-        if (fp.network_domains && fp.network_domains.length) fpParts.push(`${fp.network_domains.length} domen ext.`);
+        if (fp.imports_count) fpParts.push(`${fp.imports_count} imports`);
+        if (fp.ha_apis_count) fpParts.push(`${fp.ha_apis_count} HA APIs`);
+        if (fp.network_domains && fp.network_domains.length) fpParts.push(`${fp.network_domains.length} ext. domains`);
         if (fpParts.length) {
             html += `<div style="color:var(--text-muted);font-size:0.8em;margin-bottom:8px">
                 <strong>Fingerprint:</strong> ${fpParts.join(' · ')}${fp.network_domains && fp.network_domains.length ? ' (' + fp.network_domains.join(', ') + ')' : ''}
@@ -360,11 +360,11 @@ async function showReport(id) {
                     <div class="meta">${eFile}${f.line ? ':' + f.line : ''} ${eCode ? '— <code>' + eCode + '</code>' : ''}</div>
                 </div>
                 <div style="min-width:220px;font-size:0.85em">
-                    <div><strong>Propozycja:</strong> <span class="badge ${proposal.cls}" style="font-size:0.9em">${proposal.label}</span></div>
-                    <div style="margin-top:4px;color:var(--text-muted)"><strong>Naprawa:</strong> ${fix}</div>
+                    <div><strong>Recommendation:</strong> <span class="badge ${proposal.cls}" style="font-size:0.9em">${proposal.label}</span></div>
+                    <div style="margin-top:4px;color:var(--text-muted)"><strong>Suggested fix:</strong> ${fix}</div>
                     <button class="btn btn-sm" style="margin-top:6px;background:var(--primary);font-size:0.8em"
                         onclick="ignoreFinding(${JSON.stringify(f.category)}, ${JSON.stringify(f.file)}, ${JSON.stringify((f.description||'').substring(0,200))}, this)">
-                        Ignoruj
+                        Ignore
                     </button>
                 </div>
             </div>
@@ -387,7 +387,7 @@ async function clearResults() {
 }
 
 async function ignoreFinding(category, file, description, btn) {
-    const reason = prompt('Powód ignorowania (opcjonalnie):') ?? '';
+    const reason = prompt('Reason for ignoring (optional):') ?? '';
     btn.disabled = true;
     btn.textContent = '...';
     try {
@@ -396,11 +396,11 @@ async function ignoreFinding(category, file, description, btn) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({category, file_pattern: file, description, reason}),
         });
-        btn.textContent = 'Zignorowano';
+        btn.textContent = 'Ignored';
         btn.style.background = 'var(--safe)';
         btn.closest('.finding').style.opacity = '0.4';
     } catch (e) {
-        btn.textContent = 'Błąd';
+        btn.textContent = 'Error';
         btn.style.background = 'var(--danger)';
     }
 }
