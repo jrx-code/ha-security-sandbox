@@ -186,6 +186,12 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
                 log.info("[%s] HA API scanner: %d findings", job.id, len(ha_findings))
                 job.findings.extend(ha_findings)
 
+        # Normalize file paths to relative (strip repo_path prefix)
+        repo_prefix = str(repo_path) + "/"
+        for f in job.findings:
+            if f.file and f.file.startswith(repo_prefix):
+                f.file = f.file[len(repo_prefix):]
+
         # Aggregate high-volume info findings before AI review
         before_agg = len(job.findings)
         job.findings = _aggregate_info_findings(job.findings)
@@ -264,7 +270,10 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         # Phase 5: Report
         job.status = ScanStatus.DONE
         report_path = generate_report(job, learning_data=learning_data or None)
-        publish_scan_result(job)
+        try:
+            publish_scan_result(job)
+        except Exception as e:
+            log.warning("[%s] MQTT publish failed (non-fatal): %s", job.id, e)
         log.info("[%s] Done: %d findings, score=%s", job.id, len(job.findings), job.ai_score)
 
     except Exception as e:
