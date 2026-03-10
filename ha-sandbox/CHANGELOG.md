@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.2] - 2026-03-10
+
+### Fixed
+- **Ingress double-slash** — `GET //` from Supervisor proxy now redirects to `/` (was returning 404)
+- **Startup race condition** — retry loop waits for Supervisor API before reading config (fixes "Unable to access the API, forbidden" on fresh install)
+- **MQTT graceful fallback** — no more error when MQTT service not configured in Supervisor
+
 ## [0.12.1] - 2026-03-10
 
 ### Fixed
