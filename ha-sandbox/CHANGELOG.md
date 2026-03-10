@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.3] - 2026-03-10
+
+### Fixed
+- **Findings display bug** — HTML in `code` field (e.g. `innerHTML = '<div...'`) was parsed as real DOM elements, hiding subsequent findings; all report fields now HTML-escaped before rendering
+- **XSS hardening** — `ai_summary`, `description`, `code`, `file`, `category` escaped via `esc()` helper; `onclick` handlers use `JSON.stringify()` instead of manual backtick escaping
+
 ## [0.12.2] - 2026-03-10
 
 ### Fixed
