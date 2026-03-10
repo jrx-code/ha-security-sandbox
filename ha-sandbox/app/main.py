@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from app import settings as app_settings
 from app import storage
 from app.ai.ollama import list_ollama_models, test_ollama, test_public_api
-from app.report.generator import export_csv, export_html, export_pdf, load_all_reports, load_report
+from app.report.generator import export_csv, export_html, export_pdf, export_sarif, load_all_reports, load_report
 from app.report.mqtt import disconnect, publish_discovery, publish_status
 from app.scanner.hacs_list import fetch_installed_hacs, repo_to_url, test_ha_connection
 from app.scanner.pipeline import run_scan
@@ -198,6 +198,18 @@ async def api_report_pdf(report_id: str):
     return Response(
         content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{report_id}.pdf"'},
+    )
+
+
+@app.get("/api/report/{report_id}/sarif")
+async def api_report_sarif(report_id: str):
+    report = load_report(report_id)
+    if not report:
+        return JSONResponse(content={"error": "not found"}, status_code=404)
+    sarif = export_sarif(report)
+    return JSONResponse(
+        content=sarif,
+        headers={"Content-Disposition": f'attachment; filename="{report_id}.sarif"'},
     )
 
 
