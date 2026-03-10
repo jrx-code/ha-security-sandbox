@@ -9,6 +9,7 @@ arch:
 startup: application
 boot: auto
 init: false
+apparmor: false
 
 # Ingress (HA built-in reverse proxy with SSO)
 ingress: true
