@@ -9,3 +9,4 @@ GitPython==3.1.44
 python-multipart==0.0.20
 websockets==14.2
 esprima==4.0.1
+fpdf2==2.8.3

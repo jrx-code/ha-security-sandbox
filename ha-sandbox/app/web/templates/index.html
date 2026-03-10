@@ -373,6 +373,7 @@ async function showReport(id) {
     html += `<div style="margin-top:16px;display:flex;gap:8px">
         <a href="${BASE}/api/report/${id}/csv" class="btn btn-sm" style="text-decoration:none">CSV</a>
         <a href="${BASE}/api/report/${id}/html" target="_blank" class="btn btn-sm" style="text-decoration:none;background:var(--primary)">HTML</a>
+        <a href="${BASE}/api/report/${id}/pdf" class="btn btn-sm" style="text-decoration:none;background:#dc2626">PDF</a>
     </div>`;
     document.getElementById('modal-body').innerHTML = html;
     document.getElementById('modal').classList.add('open');
