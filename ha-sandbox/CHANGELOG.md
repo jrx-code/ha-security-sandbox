@@ -1,9 +1,15 @@
 # Changelog
 
-## [0.12.3] - 2026-03-10
+## [0.13.0] - 2026-03-10
 
 ### Added
 - **PDF export** — `/api/report/{id}/pdf` endpoint + PDF button in UI; uses fpdf2 with DejaVu Unicode font (Alpine) and Helvetica fallback
+
+### Changed
+- **AI model** — default switched from gemma3:12b to qwen2.5-coder:14b (4/4 category coverage, 0/10 on malicious code vs 2/10, 9/10 on safe code vs 5/10)
+- **AI prompt rewrite** — single-step Ollama call (was 2-step losing context), system prompt now used for Ollama (was missing), explicit "do not repeat static findings" instruction
+- **AI deduplication** — AI findings that duplicate static findings (same category+file) are filtered before report; eliminates duplicate noise
+- **AI confidence** — improved from 50% to 95% on benchmark test case
 
 ### Fixed
 - **Findings display bug** — HTML in `code` field (e.g. `innerHTML = '<div...'`) was parsed as real DOM elements, hiding subsequent findings; all report fields now HTML-escaped before rendering
