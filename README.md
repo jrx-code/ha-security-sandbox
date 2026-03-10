@@ -1,21 +1,23 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.13.0-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.20.3-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
 
-## What's New (v0.9–0.13)
+## What's New (v0.14–0.20)
 
-- **v0.13** — AI review rewrite: qwen2.5-coder model, single-step prompt, 95% confidence, PDF export, zero duplicate findings
-- **v0.12** — Actionable findings: every description says what to do, not just what was found
-- **v0.11** — Full dependency scanning: npm, pip, pyproject.toml + 55 known malicious packages + OSV.dev batch CVE
-- **v0.10** — Structural YAML parser: automation flow injection, `choose/sequence` nesting, `!include` path traversal
-- **v0.9** — 90% noise reduction after testing on 50 HACS repos (804→13 findings on large repos)
+- **v0.20** — English GUI, settings preserved on upgrade, OpenRouter 401 fix
+- **v0.19** — CVE watch: periodic vulnerability monitoring for installed deps
+- **v0.18** — SARIF export for CI/CD integration (GitHub Code Scanning, GitLab SAST)
+- **v0.17** — Cross-component intelligence: detect shared suspicious patterns across components
+- **v0.16** — Fingerprint diff/delta API: track changes between scan versions
+- **v0.15** — Scheduled periodic scans of installed HACS components
+- **v0.14** — Hot reload, configurable AI timeout, repo cache cleanup, rate limiting
 
-See [CHANGELOG](ha-sandbox/CHANGELOG.md) for full history.
+See [CHANGELOG](ha-sandbox/CHANGELOG.md) for latest release notes.
 
 ## Why?
 
@@ -68,15 +70,25 @@ Instead of generic "investigate this code", you get specific remediation:
 
 Merges overlapping findings from different scanners (e.g., static + AI + taint) using category aliases and severity ranking — no duplicate noise.
 
+### Scheduled Scans & CVE Watch
+
+- **Scheduled scans** — periodically re-scan all installed HACS components (configurable interval)
+- **CVE watch** — lightweight periodic check for new vulnerabilities in installed deps without full scan
+- **MQTT alerts** on new CVE findings
+
 ### Batch Scanning
 
 Scan all installed HACS components at once with progress tracking and SQLite-backed queue.
+
+### SARIF Export
+
+Export scan results in [SARIF](https://sarifweb.azurewebsites.net/) format for CI/CD integration — compatible with GitHub Code Scanning, GitLab SAST, and other tools.
 
 ### Reporting
 
 - **Web dashboard** with Nord theme, severity sorting, and AI summary
 - **MQTT auto-discovery** — 4 HA sensors (status, last scan, score, total scans)
-- **Export** — JSON, CSV, and standalone HTML (print/PDF ready)
+- **Export** — JSON, CSV, HTML, PDF, and SARIF
 
 ## Installation
 
@@ -182,7 +194,7 @@ The scanner learns from accumulated scan data to provide better results over tim
 | **L.2 Baseline / Norm Database** | Computes statistical profile from 10+ scans; flags components that deviate >2σ from the norm |
 | **L.3 Whitelist / False Positives** | "Ignoruj" button in UI marks findings as false positives; whitelisted patterns are filtered on re-scan |
 | **L.4 Reputation Score** | Tracks safety score trends across versions with ↑/↓/→ indicators; builds component reputation |
-| **L.5 Cross-Component Intelligence** *(planned)* | Compare components against known-good patterns; detect supply chain risks |
+| **L.5 Cross-Component Intelligence** | Compare components against known-good patterns; detect supply chain risks |
 
 ## Testing
 
@@ -226,12 +238,13 @@ cd ha-sandbox && python -m pytest tests/ -q
 
 | Priority | Feature | Description |
 |----------|---------|-------------|
-| **High** | L.5 Cross-Component Intelligence | Compare components against known-good fingerprints; detect supply chain anomalies and typosquatting |
-| **High** | Scheduled re-scans | Periodically re-scan installed components to detect upstream changes |
-| **Medium** | HACS webhook integration | Auto-scan components on HACS install/update events |
-| **Medium** | Grafana dashboard | Visualize scan trends, reputation history, and baseline deviations |
-| **Low** | Multi-user whitelist | Per-user whitelist with shared/global rules |
-| **Low** | SBOM export | Software Bill of Materials in CycloneDX/SPDX format |
+| **High** | HACS webhook / auto-scan | Auto-scan components on HACS install/update events |
+| **Medium** | HA Dashboard Lovelace card | Custom card showing security summary for installed components |
+| **Medium** | Notification alerts | Alert on critical findings via HA notifications, MQTT |
+| **Medium** | Comparative reports | Track score changes between versions, detect regressions |
+| **Low** | Multi-instance support | Scan components on remote HA instances |
+| **Low** | Community safety database | Crowd-sourced component safety ratings |
+| **Low** | HACS Store integration | Security badges in HACS store UI |
 
 ## Contributing
 
