@@ -36,7 +36,7 @@ host_network: false
 options:
   ai_provider: ollama
   ollama_url: "http://homeassistant:11434"
-  ollama_model: "gemma3:12b"
+  ollama_model: "qwen2.5-coder:14b"
   public_provider: openrouter
   public_api_key: ""
   public_model: "google/gemma-3-27b-it"
