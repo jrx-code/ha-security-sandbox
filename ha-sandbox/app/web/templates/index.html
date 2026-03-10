@@ -199,6 +199,7 @@
 
 <script>
 const BASE = '{{ base }}';
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function switchTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab:not([href])').forEach(el => el.classList.remove('active'));
@@ -278,7 +279,7 @@ async function showReport(id) {
     const resp = await fetch(BASE + '/api/report/' + id);
     const r = await resp.json();
     document.getElementById('modal-title').textContent = r.name + ' — Score: ' + (r.ai_score || 'N/A') + '/10';
-    let html = '<p style="margin-bottom:12px">' + (r.ai_summary || 'No AI summary') + '</p>';
+    let html = '<p style="margin-bottom:12px">' + esc(r.ai_summary || 'No AI summary') + '</p>';
     // Reputation trend (L.4)
     try {
         const domain = r.name.replace(/[^a-z0-9_-]/gi, '').toLowerCase();
@@ -347,18 +348,22 @@ async function showReport(id) {
     r.findings.forEach((f, idx) => {
         const proposal = getProposal(f);
         const fix = getSuggestedFix(f);
-        html += `<div class="finding finding-${f.severity}" id="finding-${idx}">
+        const eFile = esc(f.file);
+        const eCode = f.code ? esc(f.code.substring(0,80)) : '';
+        const eDesc = esc(f.description);
+        const eCat = esc(f.category);
+        html += `<div class="finding finding-${esc(f.severity)}" id="finding-${idx}">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
                 <div style="flex:1">
-                    <span class="sev">${f.severity}</span> [${f.category}]
-                    <div class="desc">${f.description}</div>
-                    <div class="meta">${f.file}${f.line ? ':' + f.line : ''} ${f.code ? '— <code>' + f.code.substring(0,80) + '</code>' : ''}</div>
+                    <span class="sev">${esc(f.severity)}</span> [${eCat}]
+                    <div class="desc">${eDesc}</div>
+                    <div class="meta">${eFile}${f.line ? ':' + f.line : ''} ${eCode ? '— <code>' + eCode + '</code>' : ''}</div>
                 </div>
                 <div style="min-width:220px;font-size:0.85em">
                     <div><strong>Propozycja:</strong> <span class="badge ${proposal.cls}" style="font-size:0.9em">${proposal.label}</span></div>
                     <div style="margin-top:4px;color:var(--text-muted)"><strong>Naprawa:</strong> ${fix}</div>
                     <button class="btn btn-sm" style="margin-top:6px;background:var(--primary);font-size:0.8em"
-                        onclick="ignoreFinding('${f.category}', '${f.file}', \`${f.description.replace(/`/g,"'").substring(0,200)}\`, this)">
+                        onclick="ignoreFinding(${JSON.stringify(f.category)}, ${JSON.stringify(f.file)}, ${JSON.stringify((f.description||'').substring(0,200))}, this)">
                         Ignoruj
                     </button>
                 </div>
