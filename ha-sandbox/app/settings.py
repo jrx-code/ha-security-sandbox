@@ -111,24 +111,27 @@ def _apply_to_runtime(data: dict) -> None:
 
 
 def init_from_env() -> None:
-    """On startup, merge env vars into saved settings (env takes precedence for secrets).
+    """On startup, seed settings.json from env vars (only for keys not yet saved).
 
     The HA addon config UI sets options that run.sh exports as SANDBOX_* env vars.
-    These must be synced into settings.json so that settings.load() returns them.
-    Without this, _get_ai_config() would return empty defaults and API calls fail (401).
+    On first start these seed settings.json so _get_ai_config() picks them up.
+    On subsequent restarts/upgrades, saved values (from web UI settings page)
+    are preserved — env vars never overwrite existing settings.
     """
     import os
-    data = load()
+    raw = _load_raw()  # only what's explicitly saved (no defaults)
+    data = {**DEFAULTS, **raw}
+
     env_token = os.environ.get("HA_TOKEN", "")
-    if env_token and not data.get("ha_token"):
+    if env_token and not raw.get("ha_token"):
         data["ha_token"] = env_token
     env_mqtt_pass = os.environ.get("MQTT_PASS", "")
-    if env_mqtt_pass and not data.get("mqtt_pass"):
+    if env_mqtt_pass and not raw.get("mqtt_pass"):
         data["mqtt_pass"] = env_mqtt_pass
 
-    # Sync addon config options (SANDBOX_* env vars from run.sh) into settings.json.
-    # Env takes precedence over saved settings for these fields, because the user
-    # sets them in the HA addon config UI and expects them to take effect immediately.
+    # Seed addon config options into settings.json on first start.
+    # Only set values not already saved — this way web UI settings
+    # (written to settings.json via /api/settings) survive restarts.
     env_map = {
         "SANDBOX_AI_PROVIDER": "ai_provider",
         "SANDBOX_PUBLIC_PROVIDER": "public_provider",
@@ -140,7 +143,7 @@ def init_from_env() -> None:
     }
     for env_var, setting_key in env_map.items():
         val = os.environ.get(env_var, "")
-        if val:
+        if val and setting_key not in raw:
             data[setting_key] = val
 
     save(data)
