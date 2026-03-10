@@ -74,9 +74,11 @@ async def ingress_middleware(request: Request, call_next):
     """Support HA ingress by reading X-Ingress-Path header."""
     ingress_path = request.headers.get("X-Ingress-Path", "")
     request.state.ingress_path = ingress_path
-    # Normalize double-slash from ingress proxy (GET // → redirect to /)
-    if request.url.path != "/" and request.url.path.startswith("//"):
-        return RedirectResponse(request.url.path.replace("//", "/", 1), status_code=301)
+    # Normalize double-slash from ingress proxy (// → treat as /)
+    path = request.url.path
+    if path != "/" and path.startswith("//"):
+        scope = request.scope
+        scope["path"] = path.replace("//", "/", 1)
     response = await call_next(request)
     return response
 
