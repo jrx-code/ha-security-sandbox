@@ -1,6 +1,7 @@
 """Generate JSON, CSV, and HTML reports from scan jobs."""
 
 import csv
+import html as html_mod
 import io
 import json
 import logging
@@ -118,21 +119,25 @@ def export_html(report: dict) -> str:
         "medium": "#ca8a04", "low": "#2563eb", "info": "#6b7280",
     }
 
+    e = html_mod.escape
     rows = []
     for f in findings:
         sev = f.get("severity", "info")
         color = severity_colors.get(sev, "#6b7280")
         rows.append(
             f'<tr>'
-            f'<td style="color:{color};font-weight:bold">{sev.upper()}</td>'
-            f'<td>{f.get("category", "")}</td>'
-            f'<td>{f.get("file", "")}</td>'
-            f'<td>{f.get("line", "")}</td>'
-            f'<td>{f.get("description", "")}</td>'
-            f'<td><code>{f.get("code", "")}</code></td>'
+            f'<td style="color:{color};font-weight:bold">{e(sev.upper())}</td>'
+            f'<td>{e(f.get("category", ""))}</td>'
+            f'<td>{e(f.get("file", ""))}</td>'
+            f'<td>{e(str(f.get("line", "")))}</td>'
+            f'<td>{e(f.get("description", ""))}</td>'
+            f'<td><code>{e(f.get("code", ""))}</code></td>'
             f'</tr>'
         )
 
+    name = e(name)
+    repo = e(repo)
+    summary = e(summary)
     score_color = "#16a34a" if score and score >= 8 else "#ea580c" if score and score >= 5 else "#dc2626"
 
     return f"""<!DOCTYPE html>
