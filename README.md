@@ -1,14 +1,15 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.12.1-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.13.0-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
 
-## What's New (v0.9–0.12)
+## What's New (v0.9–0.13)
 
+- **v0.13** — AI review rewrite: qwen2.5-coder model, single-step prompt, 95% confidence, PDF export, zero duplicate findings
 - **v0.12** — Actionable findings: every description says what to do, not just what was found
 - **v0.11** — Full dependency scanning: npm, pip, pyproject.toml + 55 known malicious packages + OSV.dev batch CVE
 - **v0.10** — Structural YAML parser: automation flow injection, `choose/sequence` nesting, `!include` path traversal
@@ -35,10 +36,14 @@ HACS components run with full access to your Home Assistant instance — they ca
 
 ### AI Review
 
-LLM-powered security audit with structured scoring rubric (0-10 scale), per-finding confidence levels, and few-shot examples. Supports:
+LLM-powered security audit with structured scoring rubric (0-10 scale), per-finding confidence levels, and few-shot examples. The AI only reports issues the static analyzer missed — no duplicate noise. Supports:
 
-- **Ollama** (local) — privacy-first, no data leaves your network
+- **Ollama** (local) — privacy-first, no data leaves your network (default: `qwen2.5-coder:14b`)
 - **OpenRouter / OpenAI** (public) — for users without local GPU
+
+### PDF Export
+
+Download scan reports as PDF with severity-colored findings, score summary, and AI analysis.
 
 ### Dependency Scanning
 
@@ -101,7 +106,7 @@ Open `http://localhost:8099` in your browser.
 |--------|---------|-------------|
 | `ai_provider` | `ollama` | AI backend: `ollama` or `public` |
 | `ollama_url` | `http://homeassistant:11434` | Ollama API endpoint |
-| `ollama_model` | `gemma3:12b` | Model for code review |
+| `ollama_model` | `qwen2.5-coder:14b` | Model for code review |
 | `public_provider` | `openrouter` | Public API: `openrouter` or `openai` |
 | `public_api_key` | — | API key for public provider |
 | `mqtt_enabled` | `true` | Publish results to MQTT |
