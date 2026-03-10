@@ -32,6 +32,8 @@ DEFAULTS = {
     "log_level": "info",
     "schedule_enabled": False,
     "schedule_interval_hours": 24,
+    "cve_watch_enabled": False,
+    "cve_watch_interval_hours": 6,
 }
 
 # Public API provider presets
