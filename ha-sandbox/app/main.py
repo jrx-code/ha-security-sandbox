@@ -50,10 +50,12 @@ async def lifespan(app: FastAPI):
         publish_status("idle")
     except Exception as e:
         log.warning("MQTT init failed (non-fatal): %s", e)
-    # Start scheduled scans if enabled
+    # Start scheduled tasks if enabled
     cfg = app_settings.load()
     if cfg.get("schedule_enabled"):
         scheduler.start(cfg.get("schedule_interval_hours", 24))
+    if cfg.get("cve_watch_enabled"):
+        scheduler.start_cve_watch(cfg.get("cve_watch_interval_hours", 6))
     yield
     scheduler.stop()
     storage.close()
@@ -530,6 +532,39 @@ async def api_scheduler_update(request: Request):
 
     if enabled and interval > 0:
         scheduler.start(interval)
+    else:
+        scheduler.stop()
+
+    return JSONResponse(content={"ok": True, **scheduler.status()})
+
+
+# --- CVE Watch API ---
+
+@app.get("/api/cve-alerts")
+async def api_cve_alerts():
+    """Get current CVE alerts from the watch system."""
+    alerts = scheduler.get_cve_alerts()
+    return JSONResponse(content={
+        "alerts": alerts,
+        "total": sum(len(v) for v in alerts.values()),
+        "components_affected": len(alerts),
+    })
+
+
+@app.post("/api/cve-watch")
+async def api_cve_watch_update(request: Request):
+    """Enable/disable CVE watch.
+
+    Body: {"enabled": true/false, "interval_hours": 6}
+    """
+    data = await request.json()
+    enabled = data.get("enabled", False)
+    interval = float(data.get("interval_hours", 6))
+
+    app_settings.save({"cve_watch_enabled": enabled, "cve_watch_interval_hours": interval})
+
+    if enabled and interval > 0:
+        scheduler.start_cve_watch(interval)
     else:
         scheduler.stop()
 
