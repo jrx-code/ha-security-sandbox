@@ -2,7 +2,7 @@ ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
 # Install git (needed for cloning repos to scan)
-RUN apk add --no-cache git
+RUN apk add --no-cache git font-dejavu
 
 # Install Python dependencies
 COPY requirements.txt /tmp/
