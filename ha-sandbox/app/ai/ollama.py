@@ -14,7 +14,7 @@ SYSTEM_PROMPT = """You are a security auditor specializing in Home Assistant cus
 
 ## Scoring rubric
 
-Rate the component 0–10 using this rubric:
+Rate the component 0-10 using this rubric:
 - 9-10: No security issues. Standard HA patterns, no dangerous APIs.
 - 7-8: Minor concerns (e.g., localStorage usage, telemetry, broad entity access) but no exploitable vulnerabilities.
 - 5-6: Moderate risks (e.g., innerHTML assignment, dynamic service calls, network requests to external servers without user visibility).
@@ -31,9 +31,10 @@ Respond with ONLY valid JSON matching this schema:
   "findings": [
     {
       "severity": "critical|high|medium|low",
-      "category": "<e.g. code_injection, xss, data_exfiltration, command_execution>",
-      "description": "<specific description of what the code does and why it's risky>",
-      "file": "<relative file path>",
+      "category": "<e.g. code_injection, xss, data_exfiltration, command_execution, credential>",
+      "description": "<specific description: what the code does, why it's risky, and what to do>",
+      "file": "<relative file path from the code section, e.g. dist/card.js or custom_components/foo/sensor.py>",
+      "line": <approximate line number or 0 if unknown>,
       "confidence": <number 0-100, confidence this is a real issue>
     }
   ]
@@ -41,11 +42,13 @@ Respond with ONLY valid JSON matching this schema:
 
 ## Rules
 
-- Only report issues actually present in the provided code. Do NOT invent findings.
-- If static analysis already flagged an issue, confirm or dismiss it — don't just repeat it.
-- For each finding, explain the specific code pattern you found and why it matters.
-- Set confidence lower when you're uncertain (e.g., the code pattern might be safe in context).
-- HA integrations legitimately use hass.services.call, hass.states.set, network requests — these are normal. Only flag when the usage pattern is unsafe.
+- Only report NEW issues the static analyzer missed. Do NOT repeat or rephrase static findings.
+- If static analysis flagged something incorrectly, you may include a finding that dismisses it (severity "info", describe why it's safe).
+- Use the exact relative file paths from the "--- filename ---" headers in the code section.
+- For each finding, cite the specific code pattern (function call, variable, line) you found.
+- Set confidence 80-100 when you see clear evidence in the code. Set 50-79 when the pattern is ambiguous.
+- HA integrations legitimately use hass.services.call, hass.states.set, fetch() to HA API — these are normal. Only flag when the usage pattern is unsafe (e.g., user input flows into eval, tokens sent to external URLs).
+- Do NOT fabricate findings. If the code is clean, return an empty findings array and a high score.
 
 ## Example
 
@@ -58,8 +61,9 @@ For a component that uses eval() with user config data:
     {
       "severity": "critical",
       "category": "code_injection",
-      "description": "config_entry.data['expression'] is passed directly to eval() in sensor.py:45, allowing arbitrary Python execution",
+      "description": "config_entry.data['expression'] is passed directly to eval() in sensor.py:45, allowing arbitrary Python execution. Replace with ast.literal_eval() or a safe expression parser.",
       "file": "custom_components/evil/sensor.py",
+      "line": 45,
       "confidence": 98
     }
   ]
@@ -114,50 +118,33 @@ def _build_code_context(repo_path: Path, max_chars: int | None = None) -> str:
 def _format_static_findings(findings: list[Finding]) -> str:
     if not findings:
         return "No static analysis findings."
-    lines = ["Static analysis findings:"]
+    lines = ["Static analysis already flagged these issues (DO NOT repeat them):"]
     for f in findings[:20]:
         lines.append(f"- [{f.severity.value}] {f.category}: {f.description} ({f.file}:{f.line})")
     return "\n".join(lines)
 
 
 async def _review_ollama(cfg: dict, user_prompt: str) -> dict:
-    """2-step Ollama review: analysis -> JSON conversion."""
+    """Single-step Ollama review with JSON output."""
     url = cfg.get("ollama_url", "http://ollama:11434")
-    model = cfg.get("ollama_model", "gemma3:12b")
+    model = cfg.get("ollama_model", "qwen2.5-coder:14b")
     timeout = float(cfg.get("ai_timeout", 300))
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        # Step 1: analysis
-        resp1 = await client.post(f"{url}/api/chat", json={
+        resp = await client.post(f"{url}/api/chat", json={
             "model": model,
-            "messages": [{"role": "user", "content": user_prompt + "\n\nList security issues found."}],
-            "stream": False,
-            "options": {"temperature": 0.1, "num_predict": 1500},
-        })
-        resp1.raise_for_status()
-        analysis = resp1.json().get("message", {}).get("content", "")
-        log.info("Ollama step 1: %d chars", len(analysis))
-
-        # Step 2: JSON conversion
-        json_prompt = f"""Convert this security analysis into a JSON object with exactly these fields:
-- score: a number from 0 to 10 (10=safe, 0=dangerous)
-- summary: a 1-2 sentence summary
-- findings: array of objects with severity (critical/high/medium/low), category, description, file
-
-Analysis to convert:
-{analysis[:3000]}
-
-Return ONLY the JSON object."""
-
-        resp2 = await client.post(f"{url}/api/generate", json={
-            "model": model,
-            "prompt": json_prompt,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.0, "num_predict": 1500},
+            "options": {"temperature": 0.1, "num_predict": 2000},
         })
-        resp2.raise_for_status()
-        return {"text": resp2.json().get("response", ""), "analysis": analysis}
+        resp.raise_for_status()
+        content = resp.json().get("message", {}).get("content", "")
+        log.info("Ollama response: %d chars, model=%s", len(content), model)
+        return {"text": content, "analysis": ""}
 
 
 async def _review_public_api(cfg: dict, user_prompt: str) -> dict:
@@ -197,10 +184,10 @@ async def _review_public_api(cfg: dict, user_prompt: str) -> dict:
 
 def _parse_json_response(text: str) -> dict:
     """Extract and parse JSON from AI response."""
+    import re
     text = text.strip()
     # Extract content from markdown code blocks
     if "```" in text:
-        import re
         m = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
         if m:
             text = m.group(1).strip()
@@ -225,6 +212,9 @@ async def ai_review(job: ScanJob, repo_path: Path) -> None:
     code_context = _build_code_context(repo_path, cfg.get("max_code_context"))
     static_context = _format_static_findings(job.findings)
 
+    # Collect existing categories for dedup
+    static_categories = {(f.category, f.file) for f in job.findings}
+
     comp_type = job.manifest.component_type.value if job.manifest else "unknown"
     user_prompt = f"""Review this Home Assistant custom component for security issues.
 
@@ -234,11 +224,9 @@ Repository: {job.repo_url}
 
 {static_context}
 
-The static analyzer flagged the issues above. Review the actual code below and:
-1. Confirm or dismiss each static finding based on context
-2. Identify any additional security issues the static analyzer missed
-3. Score the component using the rubric (0-10)
-4. Set confidence levels for each finding and the overall score
+Your job: review the actual code and find issues the static analyzer MISSED.
+Do NOT repeat the static findings above — they are already in the report.
+Only add NEW findings or dismissals of false positives.
 
 Code:
 {code_context}"""
@@ -264,14 +252,25 @@ Code:
                 severity = Severity(sev)
             except ValueError:
                 severity = Severity.MEDIUM
+
+            file_path = f.get("file", "")
+            category = f.get("category", "ai_review")
+
+            # Skip AI findings that duplicate static findings (same category + file)
+            if any(file_path.endswith(sf) or sf.endswith(file_path)
+                   for sc, sf in static_categories if sc == category):
+                log.debug("Skipping duplicate AI finding: %s in %s", category, file_path)
+                continue
+
             finding_confidence = f.get("confidence", 50)
             desc = f.get("description", "")
             if finding_confidence < 80:
                 desc += f" [confidence: {finding_confidence}%]"
             job.findings.append(Finding(
                 severity=severity,
-                category=f.get("category", "ai_review"),
-                file=f.get("file", ""),
+                category=category,
+                file=file_path,
+                line=f.get("line"),
                 description=desc,
                 code="[AI finding]",
             ))
