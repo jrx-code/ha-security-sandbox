@@ -1,5 +1,6 @@
 """HA Sandbox Analyzer — FastAPI application (HA Add-on)."""
 
+import asyncio
 import logging
 import os
 import shutil
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
     app_settings.init_from_env()
     storage.init()
     storage.cleanup_old()
+    storage.cleanup_repo_cache()
     try:
         publish_discovery()
         publish_status("idle")
@@ -54,6 +56,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="HA Sandbox Analyzer", version=__version__, lifespan=lifespan)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "templates"))
+
+# Rate limiting: max 3 concurrent scans
+_scan_semaphore = asyncio.Semaphore(3)
 
 
 @app.middleware("http")
@@ -71,15 +76,17 @@ async def ingress_middleware(request: Request, call_next):
 async def _run_scan_background(repo_url: str, name: str, batch_id: str = ""):
     job_id = f"{name or repo_url}"
     storage.create_job(job_id, name, repo_url, batch_id=batch_id)
-    try:
-        job = await run_scan(repo_url, name)
-        storage.complete_job(job_id)
-        if batch_id:
-            storage.batch_job_done(batch_id, success=True)
-    except Exception as e:
-        storage.fail_job(job_id, str(e))
-        if batch_id:
-            storage.batch_job_done(batch_id, success=False)
+    async with _scan_semaphore:
+        try:
+            job = await run_scan(repo_url, name)
+            storage.complete_job(job_id)
+            if batch_id:
+                storage.batch_job_done(batch_id, success=True)
+        except Exception as e:
+            storage.fail_job(job_id, str(e))
+            if batch_id:
+                storage.batch_job_done(batch_id, success=False)
+    storage.cleanup_repo_cache()
 
 
 async def _run_batch_background(batch_id: str, repos: list[dict]):

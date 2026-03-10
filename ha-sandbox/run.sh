@@ -70,4 +70,9 @@ export SANDBOX_REPORTS_DIR="$REPORTS_DIR"
 mkdir -p "${REPOS_DIR}" "${REPORTS_DIR}"
 
 bashio::log.info "Starting web server on port 8099 (log_level=${LOG_LEVEL})"
-exec uvicorn app.main:app --host 0.0.0.0 --port 8099 --log-level "${LOG_LEVEL}"
+RELOAD_FLAG=""
+if [ "${LOG_LEVEL}" = "debug" ]; then
+    RELOAD_FLAG="--reload --reload-dir /app"
+    bashio::log.info "Debug mode: hot-reload enabled"
+fi
+exec uvicorn app.main:app --host 0.0.0.0 --port 8099 --log-level "${LOG_LEVEL}" ${RELOAD_FLAG}

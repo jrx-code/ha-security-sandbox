@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import shutil
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -349,6 +350,40 @@ def is_whitelisted(category: str, file_path: str, description: str) -> bool:
         if pattern and pattern in file_path:
             return True
     return False
+
+
+def cleanup_repo_cache(max_repos: int = 50, max_age_days: int = 14) -> int:
+    """Remove old cached repos to prevent disk bloat.
+
+    Keeps at most max_repos, removing oldest first.
+    Also removes any repos older than max_age_days.
+    Returns number of repos removed.
+    """
+    from app import settings as app_settings
+    repos_dir = Path(app_settings.get("repos_dir", "/data/repos"))
+    if not repos_dir.exists():
+        return 0
+
+    repos = sorted(repos_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+    removed = 0
+    cutoff = datetime.now().timestamp() - (max_age_days * 86400)
+
+    # Remove repos older than max_age_days
+    for repo in repos:
+        if repo.stat().st_mtime < cutoff:
+            shutil.rmtree(repo, ignore_errors=True)
+            removed += 1
+
+    # Re-list and trim to max_repos
+    repos = sorted(repos_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+    while len(repos) > max_repos:
+        oldest = repos.pop(0)
+        shutil.rmtree(oldest, ignore_errors=True)
+        removed += 1
+
+    if removed:
+        log.info("Repo cache cleanup: removed %d repos", removed)
+    return removed
 
 
 def close():

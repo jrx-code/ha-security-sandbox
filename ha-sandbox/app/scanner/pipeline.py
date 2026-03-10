@@ -1,5 +1,6 @@
 """Scan pipeline: orchestrates fetch -> static analysis -> AI review -> report."""
 
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -198,11 +199,17 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
         if before_agg != len(job.findings):
             log.info("[%s] Aggregation: %d → %d findings", job.id, before_agg, len(job.findings))
 
-        # Phase 4: AI review
+        # Phase 4: AI review (with timeout)
         job.status = ScanStatus.AI_REVIEW
         log.info("[%s] Phase 4: AI review (%d static findings)", job.id, len(job.findings))
         publish_status(f"ai_review:{job.name}")
-        await ai_review(job, repo_path)
+        from app.config import settings as cfg
+        try:
+            await asyncio.wait_for(ai_review(job, repo_path), timeout=cfg.scan_timeout_seconds)
+        except asyncio.TimeoutError:
+            log.warning("[%s] AI review timed out after %ds — continuing with static findings only",
+                        job.id, cfg.scan_timeout_seconds)
+            job.ai_score = None
         log.info("[%s] Phase 4 done: score=%s", job.id, job.ai_score)
 
         # Deduplication: merge static + AI findings
