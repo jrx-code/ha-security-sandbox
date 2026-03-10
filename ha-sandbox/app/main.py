@@ -524,6 +524,17 @@ async def api_scheduler_update(request: Request):
     return JSONResponse(content={"ok": True, **scheduler.status()})
 
 
+# --- Cross-Component Intelligence API (L.5) ---
+
+@app.get("/api/intelligence")
+async def api_cross_component():
+    """Cross-component pattern analysis across all scanned components."""
+    from app.learning.cross_component import analyze_cross_component
+    conn = storage.get_conn()
+    result = analyze_cross_component(conn)
+    return JSONResponse(content=result)
+
+
 @app.get("/api/system")
 async def api_system_info():
     repos_dir = Path(app_settings.get("repos_dir", "/data/repos"))
