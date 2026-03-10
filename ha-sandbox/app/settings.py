@@ -111,7 +111,12 @@ def _apply_to_runtime(data: dict) -> None:
 
 
 def init_from_env() -> None:
-    """On startup, merge env vars into saved settings (env takes precedence for secrets)."""
+    """On startup, merge env vars into saved settings (env takes precedence for secrets).
+
+    The HA addon config UI sets options that run.sh exports as SANDBOX_* env vars.
+    These must be synced into settings.json so that settings.load() returns them.
+    Without this, _get_ai_config() would return empty defaults and API calls fail (401).
+    """
     import os
     data = load()
     env_token = os.environ.get("HA_TOKEN", "")
@@ -120,4 +125,22 @@ def init_from_env() -> None:
     env_mqtt_pass = os.environ.get("MQTT_PASS", "")
     if env_mqtt_pass and not data.get("mqtt_pass"):
         data["mqtt_pass"] = env_mqtt_pass
+
+    # Sync addon config options (SANDBOX_* env vars from run.sh) into settings.json.
+    # Env takes precedence over saved settings for these fields, because the user
+    # sets them in the HA addon config UI and expects them to take effect immediately.
+    env_map = {
+        "SANDBOX_AI_PROVIDER": "ai_provider",
+        "SANDBOX_PUBLIC_PROVIDER": "public_provider",
+        "SANDBOX_PUBLIC_API_KEY": "public_api_key",
+        "SANDBOX_PUBLIC_MODEL": "public_model",
+        "SANDBOX_PUBLIC_URL": "public_url",
+        "SANDBOX_OLLAMA_URL": "ollama_url",
+        "SANDBOX_OLLAMA_MODEL": "ollama_model",
+    }
+    for env_var, setting_key in env_map.items():
+        val = os.environ.get(env_var, "")
+        if val:
+            data[setting_key] = val
+
     save(data)
