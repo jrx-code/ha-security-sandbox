@@ -3,40 +3,59 @@
 profile ha_security_sandbox flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
 
-  # Network access (git clone, API calls, MQTT)
-  network inet stream,
-  network inet dgram,
-  network inet6 stream,
-  network inet6 dgram,
+  # Full network access (git clone, API calls, MQTT)
+  network,
+  deny network raw,
 
-  # Application files
-  /app/** r,
-  /run.sh rx,
+  # Capabilities
+  capability net_bind_service,
+
+  # S6-Overlay / Bashio
+  /usr/lib/bashio/** ix,
+  /etc/s6/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+
+  # Shell and system binaries
+  /bin/** ix,
+  /usr/bin/** ix,
 
   # Python
-  /usr/local/bin/python3* rix,
-  /usr/local/lib/python3*/** r,
+  /usr/local/bin/python3* ix,
+  /usr/local/lib/** mr,
   /usr/lib/python3*/** r,
 
   # Git
   /usr/bin/git rix,
   /usr/libexec/git-core/** rix,
 
-  # Data directories
+  # Application files
+  /app/** r,
+  /run.sh rx,
+
+  # Deny dangerous proc/sys writes, allow reads via glob
+  deny /proc/** wl,
+  deny /sys/** wl,
+
+  # General read + specific write areas
+  / r,
+  /** r,
+  /tmp/** rwk,
   /data/** rw,
   /share/ha-sandbox/** rw,
+  /run/{,**} rwk,
+  /dev/tty rw,
 
   # Config
   /config.yaml r,
 
-  # Temp
-  /tmp/** rw,
-  /proc/** r,
-  /sys/fs/cgroup/** r,
-
-  # DNS resolution
+  # DNS
+  /etc/resolv.conf rw,
   /etc/hosts r,
-  /etc/resolv.conf r,
   /etc/nsswitch.conf r,
 
   # SSL certificates
