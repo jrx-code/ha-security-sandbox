@@ -1,5 +1,5 @@
 name: "HA Security Sandbox"
-version: "0.19.0"
+version: "0.20.0"
 slug: ha_security_sandbox
 description: "Security scanner for Home Assistant custom components — static analysis + AI review"
 url: "https://github.com/jrx-code/ha-security-sandbox"
