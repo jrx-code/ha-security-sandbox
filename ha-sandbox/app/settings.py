@@ -30,6 +30,8 @@ DEFAULTS = {
     "ai_timeout": 300,
     "max_file_size_kb": 500,
     "log_level": "info",
+    "schedule_enabled": False,
+    "schedule_interval_hours": 24,
 }
 
 # Public API provider presets
