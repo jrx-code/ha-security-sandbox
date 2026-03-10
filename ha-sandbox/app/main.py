@@ -181,7 +181,7 @@ async def api_report_pdf(report_id: str):
     report = load_report(report_id)
     if not report:
         return JSONResponse(content={"error": "not found"}, status_code=404)
-    pdf_bytes = export_pdf(report)
+    pdf_bytes = bytes(export_pdf(report))
     return Response(
         content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{report_id}.pdf"'},
@@ -283,11 +283,16 @@ async def api_scan_batch(request: Request, background_tasks: BackgroundTasks):
     if not repos:
         return JSONResponse(content={"error": "No repos provided"}, status_code=400)
 
-    # Normalize URLs
+    # Normalize: accept both ["url", ...] and [{"url": "...", "name": "..."}, ...]
+    normalized = []
     for item in repos:
+        if isinstance(item, str):
+            item = {"url": item, "name": ""}
         url = item.get("url", "")
         if not url.startswith("http"):
             item["url"] = f"https://github.com/{url}.git"
+        normalized.append(item)
+    repos = normalized
 
     batch_id = uuid.uuid4().hex[:12]
     storage.create_batch(batch_id, len(repos))

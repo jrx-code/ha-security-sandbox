@@ -11,8 +11,8 @@ SETTINGS_FILE = Path("/data/settings.json")
 
 DEFAULTS = {
     "ai_provider": "ollama",  # "ollama" or "public"
-    "ollama_url": "http://ollama:11434",
-    "ollama_model": "gemma3:12b",
+    "ollama_url": "http://homeassistant:11434",
+    "ollama_model": "qwen2.5-coder:14b",
     "public_provider": "openrouter",  # "openrouter" or "openai"
     "public_api_key": "",
     "public_model": "google/gemma-3-27b-it",
@@ -29,6 +29,7 @@ DEFAULTS = {
     "max_code_context": 15000,
     "ai_timeout": 300,
     "max_file_size_kb": 500,
+    "log_level": "info",
 }
 
 # Public API provider presets
