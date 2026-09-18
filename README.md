@@ -1,14 +1,15 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.20.3-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.21.0-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-279%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
 
-## What's New (v0.14–0.20)
+## What's New (v0.14–0.21)
 
+- **v0.21** — HACS auto-scan on install/update + MQTT critical alerts; `full_name` fix for installed HACS scans
 - **v0.20** — English GUI, settings preserved on upgrade, OpenRouter 401 fix
 - **v0.19** — CVE watch: periodic vulnerability monitoring for installed deps
 - **v0.18** — SARIF export for CI/CD integration (GitHub Code Scanning, GitLab SAST)
@@ -76,6 +77,13 @@ Merges overlapping findings from different scanners (e.g., static + AI + taint) 
 - **CVE watch** — lightweight periodic check for new vulnerabilities in installed deps without full scan
 - **MQTT alerts** on new CVE findings
 
+### HACS Auto-scan
+
+- Listens for HACS install/update events over the HA WebSocket API
+- Queues a full security scan for the affected component (with cooldown + snapshot-diff fallback)
+- Publishes an MQTT critical alert when findings are critical or the AI score is in DANGER range
+- Toggle via add-on option / settings (`hacs_autoscan_enabled`) or `POST /api/hacs-autoscan`
+
 ### Batch Scanning
 
 Scan all installed HACS components at once with progress tracking and SQLite-backed queue.
@@ -123,6 +131,7 @@ Open `http://localhost:8099` in your browser.
 | `public_api_key` | — | API key for public provider |
 | `mqtt_enabled` | `true` | Publish results to MQTT |
 | `mqtt_tls` | `true` | Use TLS for MQTT connection |
+| `hacs_autoscan_enabled` | `true` | Auto-scan on HACS install/update |
 | `log_level` | `info` | Logging verbosity |
 
 ## Architecture
@@ -145,6 +154,7 @@ ha-sandbox/
 │   │   ├── generator.py  # JSON, CSV, HTML export
 │   │   └── mqtt.py       # HA MQTT auto-discovery
 │   ├── storage.py        # SQLite persistence + batch queue
+│   ├── hacs_watcher.py   # HACS install/update auto-scan (WebSocket)
 │   ├── main.py           # FastAPI REST API
 │   ├── models.py         # Pydantic models
 │   └── web/templates/    # Dashboard UI
@@ -183,6 +193,8 @@ Clone repo → Parse manifest
 | `GET` | `/api/whitelist` | List all whitelisted patterns |
 | `GET` | `/api/reputation/{domain}` | Get component reputation (trend, history) |
 | `GET` | `/api/reputation` | Get all component reputations |
+| `GET` | `/api/hacs-autoscan` | HACS auto-scan watcher status |
+| `POST` | `/api/hacs-autoscan` | Enable/disable HACS auto-scan |
 
 ## Code Learning
 
@@ -203,7 +215,7 @@ pip install -r ha-sandbox/requirements.txt
 cd ha-sandbox && python -m pytest tests/ -q
 ```
 
-**265 tests** across 14 suites covering all pipeline phases:
+**279 tests** across 15 suites covering all pipeline phases:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
@@ -223,6 +235,7 @@ cd ha-sandbox && python -m pytest tests/ -q
 | CVE Lookup | 9 | OSV.dev queries, version matching |
 | Dependency Scanner | 21 | npm, pip, pyproject.toml, malicious packages, batch CVE |
 | Storage | 8 | SQLite CRUD, migrations |
+| HACS Auto-scan | 14 | Event parse, snapshot diff, cooldown, lifecycle |
 
 ## Security Scoring
 
@@ -238,7 +251,6 @@ cd ha-sandbox && python -m pytest tests/ -q
 
 | Priority | Feature | Description |
 |----------|---------|-------------|
-| **High** | HACS webhook / auto-scan | Auto-scan components on HACS install/update events |
 | **Medium** | HA Dashboard Lovelace card | Custom card showing security summary for installed components |
 | **Medium** | Notification alerts | Alert on critical findings via HA notifications, MQTT |
 | **Medium** | Comparative reports | Track score changes between versions, detect regressions |
