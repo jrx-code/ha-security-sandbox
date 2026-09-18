@@ -34,6 +34,11 @@ DEFAULTS = {
     "schedule_interval_hours": 24,
     "cve_watch_enabled": False,
     "cve_watch_interval_hours": 6,
+    # Notification alerts (#3)
+    "alerts_enabled": True,
+    "alert_severity_threshold": "critical",  # critical | high | medium
+    "alert_cooldown_seconds": 3600,
+    "alert_notify_service": "",  # e.g. notify.mobile_app_pixel
 }
 
 # Public API provider presets
@@ -145,5 +150,10 @@ def init_from_env() -> None:
         val = os.environ.get(env_var, "")
         if val and setting_key not in raw:
             data[setting_key] = val
+
+    # Seed alerts toggle from addon config / env on first start only
+    env_alerts = os.environ.get("SANDBOX_ALERTS_ENABLED", "")
+    if env_alerts and "alerts_enabled" not in raw:
+        data["alerts_enabled"] = env_alerts.lower() in ("1", "true", "yes", "on")
 
     save(data)
