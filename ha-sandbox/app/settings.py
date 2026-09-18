@@ -157,3 +157,13 @@ def init_from_env() -> None:
         data["alerts_enabled"] = env_alerts.lower() in ("1", "true", "yes", "on")
 
     save(data)
+
+    # Register /api/alerts once FastAPI app exists (startup via lifespan)
+    try:
+        import sys
+        main_mod = sys.modules.get("app.main")
+        if main_mod is not None and hasattr(main_mod, "app"):
+            from app import alerts_api
+            alerts_api.register_routes(main_mod.app)
+    except Exception as e:
+        log.warning("alerts_api register skipped: %s", e)
