@@ -1,14 +1,15 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.20.3-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.21.1-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
 
-## What's New (v0.14–0.20)
+## What's New (v0.14–0.21)
 
+- **v0.21.1** — Notification alerts on critical/high findings (HA + MQTT + optional mobile push)
 - **v0.20** — English GUI, settings preserved on upgrade, OpenRouter 401 fix
 - **v0.19** — CVE watch: periodic vulnerability monitoring for installed deps
 - **v0.18** — SARIF export for CI/CD integration (GitHub Code Scanning, GitLab SAST)
@@ -84,10 +85,21 @@ Scan all installed HACS components at once with progress tracking and SQLite-bac
 
 Export scan results in [SARIF](https://sarifweb.azurewebsites.net/) format for CI/CD integration — compatible with GitHub Code Scanning, GitLab SAST, and other tools.
 
+
+### Notification Alerts
+
+When a scan finds issues at or above a configurable severity threshold (default: **critical**):
+
+- **HA persistent notifications** via REST
+- **MQTT alerts** on `{node_id}/alert` with optional discovery sensors
+- **Optional mobile push** through any HA notify service (`alert_notify_service`)
+- **Rate limiting** (`alert_cooldown_seconds`, default 1 hour) to avoid alert fatigue
+- Toggle with `alerts_enabled` / addon option / `GET|POST /api/alerts`
+
 ### Reporting
 
 - **Web dashboard** with Nord theme, severity sorting, and AI summary
-- **MQTT auto-discovery** — 4 HA sensors (status, last scan, score, total scans)
+- **MQTT auto-discovery** — sensors (status, last scan, score, total scans, last alert) + alert binary_sensor
 - **Export** — JSON, CSV, HTML, PDF, and SARIF
 
 ## Installation
@@ -106,133 +118,74 @@ Export scan results in [SARIF](https://sarifweb.azurewebsites.net/) format for C
 
 ```bash
 cp .env.example .env
-# Edit .env with your MQTT and Ollama settings
+# Edit .env with your settings
 docker compose up -d
 ```
 
-Open `http://localhost:8099` in your browser.
+Open http://localhost:8099
 
 ## Configuration
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `ai_provider` | `ollama` | AI backend: `ollama` or `public` |
-| `ollama_url` | `http://homeassistant:11434` | Ollama API endpoint |
-| `ollama_model` | `qwen2.5-coder:14b` | Model for code review |
-| `public_provider` | `openrouter` | Public API: `openrouter` or `openai` |
+| `ai_provider` | `ollama` | `ollama` or `public` |
+| `ollama_url` | `http://homeassistant:11434` | Ollama API URL |
+| `ollama_model` | `qwen2.5-coder:14b` | Local model |
+| `public_provider` | `openrouter` | `openrouter` or `openai` |
 | `public_api_key` | — | API key for public provider |
-| `mqtt_enabled` | `true` | Publish results to MQTT |
-| `mqtt_tls` | `true` | Use TLS for MQTT connection |
-| `log_level` | `info` | Logging verbosity |
+| `ha_url` / `ha_token` | — | HA REST for installed components + alerts |
+| `mqtt_*` | — | MQTT auto-discovery / alert publish |
+| `alerts_enabled` | `true` | Send alerts on findings at/above threshold |
+| `alert_severity_threshold` | `critical` | `critical` / `high` / `medium` |
+| `alert_cooldown_seconds` | `3600` | Per-component alert rate limit |
+| `alert_notify_service` | _(empty)_ | Optional HA notify service for mobile push |
+
+## Usage
+
+1. Open **Security Sandbox** from the HA sidebar
+2. Scan a GitHub URL, pick an installed HACS component, or batch-scan all
+3. Review findings by severity; export PDF/SARIF as needed
+4. On critical findings, check HA notifications / MQTT `…/alert` (if enabled)
+
+## MQTT Sensors
+
+| Sensor | Topic | Description |
+|--------|-------|-------------|
+| Status | `{node_id}/status` | Current scanner state |
+| Last Scan | `{node_id}/last_scan` | Component name of last scan |
+| Last Score | `{node_id}/last_score` | AI safety score |
+| Total Scans | `{node_id}/scans_total` | Lifetime scan count |
+| Last Alert | `{node_id}/last_alert` | Last alert title/component |
+| Alert Active | `{node_id}/alert_active` | Binary sensor (problem) |
+| Alert payload | `{node_id}/alert` | JSON alert event |
+
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/ -q
+```
+
+Offline alert tests (no HA/MQTT):
+
+```bash
+pytest tests/test_alerts.py -q
+```
 
 ## Architecture
 
 ```
 ha-sandbox/
-├── app/
-│   ├── ai/              # AI review (Ollama + public API)
-│   │   └── ollama.py    # Structured prompting, JSON parsing, confidence scores
-│   ├── scanner/          # Static analysis engines
-│   │   ├── static_python.py  # Python AST + taint tracking
-│   │   ├── static_js.py      # JavaScript AST (esprima) + regex fallback
-│   │   ├── static_yaml.py    # YAML/Jinja2 structural parser + automation flow analysis
-│   │   ├── static_ha.py      # HA API pattern validator
-│   │   ├── cve_lookup.py     # OSV.dev CVE + malicious package detection (npm, pip, pyproject)
-│   │   ├── pipeline.py       # Orchestrator + deduplication
-│   │   ├── fetch.py          # Git clone + manifest parsing
-│   │   └── hacs_list.py      # HACS WebSocket component listing
-│   ├── report/           # Output generation
-│   │   ├── generator.py  # JSON, CSV, HTML export
-│   │   └── mqtt.py       # HA MQTT auto-discovery
-│   ├── storage.py        # SQLite persistence + batch queue
-│   ├── main.py           # FastAPI REST API
-│   ├── models.py         # Pydantic models
-│   └── web/templates/    # Dashboard UI
-├── config.yaml           # HA Add-on manifest
-├── Dockerfile            # Multi-arch build (amd64, aarch64)
-└── run.sh                # Entrypoint (Supervisor + standalone)
+  app/
+    alerts.py          # Notification alerts (#3)
+    alerts_api.py      # GET/POST /api/alerts
+    scanner/           # Static + pipeline
+    ai/                # Ollama / public LLM
+    report/            # MQTT, PDF, SARIF
+    web/               # FastAPI + dashboard
+  config.yaml          # Add-on metadata
+  run.sh               # Add-on entrypoint
 ```
-
-### Scan Pipeline
-
-```
-Clone repo → Parse manifest
-    → Phase 1a: CVE lookup (manifest deps)
-    → Phase 1b: Static analysis (5 scanners)
-    → Phase 1c: Repo-wide dependency scan (npm, pip, pyproject.toml)
-    → Phase 2: AI review
-    → Deduplicate findings → Filter whitelist → Generate report → MQTT publish
-```
-
-## API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/scan` | Scan a single repository URL |
-| `POST` | `/api/scan/batch` | Scan multiple repositories |
-| `POST` | `/api/scan/installed` | Scan all installed HACS components |
-| `GET` | `/api/scan/{id}` | Get scan job status |
-| `GET` | `/api/scan/batch/{id}` | Get batch status |
-| `GET` | `/api/reports` | List all scan reports |
-| `GET` | `/api/report/{id}` | Get report details |
-| `GET` | `/api/report/{id}/csv` | Export report as CSV |
-| `GET` | `/api/report/{id}/html` | Export report as HTML |
-| `GET` | `/api/hacs/installed` | List installed HACS components |
-| `POST` | `/api/whitelist` | Add finding to whitelist (false positive) |
-| `DELETE` | `/api/whitelist/{hash}` | Remove whitelist entry |
-| `GET` | `/api/whitelist` | List all whitelisted patterns |
-| `GET` | `/api/reputation/{domain}` | Get component reputation (trend, history) |
-| `GET` | `/api/reputation` | Get all component reputations |
-
-## Code Learning
-
-The scanner learns from accumulated scan data to provide better results over time:
-
-| Module | What it does |
-|--------|-------------|
-| **L.1 Pattern Fingerprinting** | Extracts structural fingerprints (imports, HA APIs, network domains, file types) and tracks changes across versions |
-| **L.2 Baseline / Norm Database** | Computes statistical profile from 10+ scans; flags components that deviate >2σ from the norm |
-| **L.3 Whitelist / False Positives** | "Ignoruj" button in UI marks findings as false positives; whitelisted patterns are filtered on re-scan |
-| **L.4 Reputation Score** | Tracks safety score trends across versions with ↑/↓/→ indicators; builds component reputation |
-| **L.5 Cross-Component Intelligence** | Compare components against known-good patterns; detect supply chain risks |
-
-## Testing
-
-```bash
-pip install -r ha-sandbox/requirements.txt
-cd ha-sandbox && python -m pytest tests/ -q
-```
-
-**265 tests** across 14 suites covering all pipeline phases:
-
-| Suite | Tests | Coverage |
-|-------|-------|----------|
-| Phase 1 — Fetch & Parse | 15 | Clone, manifest detection, component types |
-| Phase 2 — Static (Python) | 23 | AST patterns, taint flow, dangerous calls |
-| Phase 2 — Static (JS) | 18 | AST + regex, XSS, eval, exfiltration, obfuscation, noise reduction |
-| Phase 2 — YAML | 10 | Shell commands, secrets, Jinja2 injection |
-| Phase 2 — YAML Enhanced | 22 | Structural parsing, automation flow injection, !include, choose/sequence |
-| Phase 2 — HA Patterns | 11 | Dynamic services, event bus, auth, schemas |
-| Phase 2 — Batch | 13 | Queue, progress, SQLite persistence |
-| Phase 2 — Dedup | 10 | Category aliases, severity merge, taint merge |
-| Phase 4 — AI Review | 10 | Prompting, JSON parsing, error handling |
-| Phase 5 — Reports | 12 | JSON, CSV, HTML export, MQTT discovery |
-| Phase 6 — API | 8 | REST endpoints, error responses |
-| Phase 7 — Pipeline | 5 | End-to-end integration |
-| Code Learning | 25 | Fingerprinting, baseline, whitelist, reputation |
-| CVE Lookup | 9 | OSV.dev queries, version matching |
-| Dependency Scanner | 21 | npm, pip, pyproject.toml, malicious packages, batch CVE |
-| Storage | 8 | SQLite CRUD, migrations |
-
-## Security Scoring
-
-| Score | Label | Meaning |
-|-------|-------|---------|
-| 9-10 | **SAFE** | No security issues found |
-| 7-8 | **SAFE** | Minor concerns, no exploitable vulnerabilities |
-| 5-6 | **CAUTION** | Moderate risks requiring review |
-| 3-4 | **CAUTION** | Significant risks present |
-| 0-2 | **DANGER** | Critical — actively dangerous patterns |
 
 ## Future Plans
 
@@ -240,7 +193,6 @@ cd ha-sandbox && python -m pytest tests/ -q
 |----------|---------|-------------|
 | **High** | HACS webhook / auto-scan | Auto-scan components on HACS install/update events |
 | **Medium** | HA Dashboard Lovelace card | Custom card showing security summary for installed components |
-| **Medium** | Notification alerts | Alert on critical findings via HA notifications, MQTT |
 | **Medium** | Comparative reports | Track score changes between versions, detect regressions |
 | **Low** | Multi-instance support | Scan components on remote HA instances |
 | **Low** | Community safety database | Crowd-sourced component safety ratings |
