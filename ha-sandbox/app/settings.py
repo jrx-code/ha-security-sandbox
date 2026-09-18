@@ -34,6 +34,7 @@ DEFAULTS = {
     "schedule_interval_hours": 24,
     "cve_watch_enabled": False,
     "cve_watch_interval_hours": 6,
+    "hacs_autoscan_enabled": True,
 }
 
 # Public API provider presets
@@ -145,5 +146,10 @@ def init_from_env() -> None:
         val = os.environ.get(env_var, "")
         if val and setting_key not in raw:
             data[setting_key] = val
+
+    # Bool addon option — seed only if not already saved
+    env_autoscan = os.environ.get("SANDBOX_HACS_AUTOSCAN_ENABLED", "")
+    if env_autoscan and "hacs_autoscan_enabled" not in raw:
+        data["hacs_autoscan_enabled"] = env_autoscan.lower() in ("true", "1", "yes", "on")
 
     save(data)
