@@ -47,6 +47,7 @@ if [ "$STANDALONE" = "false" ]; then
     fi
     export SANDBOX_MQTT_ENABLED="$(bashio::config 'mqtt_enabled')"
     export SANDBOX_MQTT_TLS="$(bashio::config 'mqtt_tls')"
+    export SANDBOX_HACS_AUTOSCAN_ENABLED="$(bashio::config 'hacs_autoscan_enabled')"
 
     # HA API via Supervisor
     export SANDBOX_HA_URL="http://supervisor/core"

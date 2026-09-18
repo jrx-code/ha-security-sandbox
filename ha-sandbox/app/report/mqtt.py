@@ -97,6 +97,23 @@ def publish_status(status: str):
         log.warning("MQTT publish failed: %s", e)
 
 
+def publish_critical_alert(name: str, findings_summary: str):
+    """Publish a critical-finding alert under the existing MQTT node_id."""
+    try:
+        client = _get_client()
+        node = settings.mqtt_node_id
+        payload = json.dumps({
+            "component": name,
+            "severity": "critical",
+            "summary": findings_summary,
+        })
+        client.publish(f"{node}/critical_alert", payload, retain=False)
+        client.publish(f"{node}/status", f"critical:{name}", retain=True)
+        log.warning("MQTT critical alert published for %s", name)
+    except Exception as e:
+        log.warning("MQTT critical alert failed: %s", e)
+
+
 def disconnect():
     global _client
     if _client:
