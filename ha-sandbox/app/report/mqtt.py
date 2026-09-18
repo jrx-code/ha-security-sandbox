@@ -56,6 +56,7 @@ def publish_discovery():
         ("last_scan", "Last Scan", None, "mdi:clock-check"),
         ("last_score", "Last Score", None, "mdi:counter"),
         ("scans_total", "Total Scans", None, "mdi:numeric"),
+        ("last_alert", "Last Alert", None, "mdi:alert"),
     ]
 
     for obj_id, name, dev_class, icon in sensors:
@@ -71,7 +72,20 @@ def publish_discovery():
         topic = f"{base}/{obj_id}/config"
         client.publish(topic, json.dumps(config), retain=True)
 
-    log.info("MQTT discovery published for %d sensors", len(sensors))
+    bin_base = f"homeassistant/binary_sensor/{node}"
+    alert_cfg = {
+        "name": "Finding Alert",
+        "unique_id": f"{node}_alert",
+        "state_topic": f"{node}/alert_active",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "device_class": "problem",
+        "device": device,
+        "icon": "mdi:shield-alert",
+    }
+    client.publish(f"{bin_base}/alert/config", json.dumps(alert_cfg), retain=True)
+
+    log.info("MQTT discovery published for %d sensors + alert binary_sensor", len(sensors))
 
 
 def publish_scan_result(job: ScanJob):
@@ -95,6 +109,39 @@ def publish_status(status: str):
         client.publish(f"{settings.mqtt_node_id}/status", status, retain=True)
     except Exception as e:
         log.warning("MQTT publish failed: %s", e)
+
+
+
+def publish_finding_alert(job: ScanJob, findings: list, *, title: str = "", message: str = ""):
+    """Publish finding alert to {mqtt_node_id}/alert (main-branch MVP; independent of PR #9)."""
+    try:
+        client = _get_client()
+        node = settings.mqtt_node_id
+        name = job.name or (job.manifest.domain if job.manifest else "") or job.id
+        top_sev = findings[0].severity.value if findings else "critical"
+        payload = {
+            "component": name,
+            "severity": top_sev,
+            "count": len(findings),
+            "title": title,
+            "summary": (message or "")[:500],
+            "findings": [
+                {
+                    "severity": f.severity.value,
+                    "category": f.category,
+                    "file": f.file,
+                    "description": (f.description or "")[:200],
+                }
+                for f in findings[:10]
+            ],
+        }
+        client.publish(f"{node}/alert", json.dumps(payload), retain=False)
+        client.publish(f"{node}/last_alert", title or name, retain=True)
+        client.publish(f"{node}/alert_active", "ON", retain=True)
+        client.publish(f"{node}/status", f"alert:{name}", retain=True)
+        log.warning("MQTT finding alert published for %s (%d findings)", name, len(findings))
+    except Exception as e:
+        log.warning("MQTT finding alert failed: %s", e)
 
 
 def disconnect():
