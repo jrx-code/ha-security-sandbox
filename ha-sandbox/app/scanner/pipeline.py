@@ -59,7 +59,7 @@ def _aggregate_info_findings(findings: list[Finding], max_network: int = 5) -> l
     network_findings = [f for f in findings if f.category == "network"]
     other_findings = [f for f in findings if f.category != "network"]
 
-    if len(network_findings) <= max_network:
+    if not (len(network_findings) > max_network):
         return findings
 
     # Keep first max_network, aggregate the rest into a summary
@@ -281,6 +281,11 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
             publish_scan_result(job)
         except Exception as e:
             log.warning("[%s] MQTT publish failed (non-fatal): %s", job.id, e)
+        try:
+            from app.alerts import maybe_alert
+            await maybe_alert(job)
+        except Exception as e:
+            log.warning("[%s] Alert dispatch failed (non-fatal): %s", job.id, e)
         log.info("[%s] Done: %d findings, score=%s", job.id, len(job.findings), job.ai_score)
 
     except Exception as e:
