@@ -116,6 +116,11 @@ def publish_critical_alert(name: str, findings_summary: str):
 
 def disconnect():
     global _client
+    try:
+        from app import hacs_autoscan_api
+        hacs_autoscan_api.maybe_stop()
+    except Exception:
+        pass
     if _client:
         _client.loop_stop()
         _client.disconnect()

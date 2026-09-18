@@ -78,15 +78,32 @@ def load() -> dict:
 
 def save(data: dict) -> None:
     current = load()
+    prev_autoscan = current.get("hacs_autoscan_enabled")
     current.update(data)
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(current, indent=2))
     log.info("Settings saved to %s", SETTINGS_FILE)
     _apply_to_runtime(current)
+    if "hacs_autoscan_enabled" in data and data.get("hacs_autoscan_enabled") != prev_autoscan:
+        _sync_hacs_autoscan(bool(current.get("hacs_autoscan_enabled")))
 
 
 def get(key: str, default: Any = None) -> Any:
     return load().get(key, default)
+
+
+def _sync_hacs_autoscan(enabled: bool) -> None:
+    """Start/stop HACS autoscan watcher to match settings."""
+    try:
+        from app import hacs_autoscan_api
+        hacs_autoscan_api.wire_app()
+        from app import hacs_watcher
+        if enabled:
+            hacs_watcher.start()
+        else:
+            hacs_watcher.stop()
+    except Exception as e:
+        log.warning("HACS autoscan sync failed (non-fatal): %s", e)
 
 
 def _apply_to_runtime(data: dict) -> None:
@@ -153,3 +170,9 @@ def init_from_env() -> None:
         data["hacs_autoscan_enabled"] = env_autoscan.lower() in ("true", "1", "yes", "on")
 
     save(data)
+    # After app is up, lifespan also calls init_from_env — register routes + start watcher
+    try:
+        from app import hacs_autoscan_api
+        hacs_autoscan_api.maybe_start()
+    except Exception as e:
+        log.warning("HACS autoscan startup hook failed (non-fatal): %s", e)
