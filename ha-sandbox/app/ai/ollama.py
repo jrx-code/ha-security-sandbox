@@ -159,7 +159,7 @@ async def _review_public_api(cfg: dict, user_prompt: str) -> dict:
         "Content-Type": "application/json",
     }
     if "openrouter" in api_url:
-        headers["HTTP-Referer"] = "https://github.com/jrx-code/ha-security-sandbox"
+        headers["HTTP-Referer"] = "https://github.com/jrx-code/hassio-security-sandbox"
         headers["X-Title"] = "HA Sandbox Analyzer"
 
     body = {

@@ -4,7 +4,7 @@
 # Required env vars:
 #   GITHUB_TOKEN       — GitHub PAT with repo scope (read issues)
 #   GITLAB_TOKEN_SYNC  — GitLab PAT with api scope (create issues)
-#   GITHUB_REPO        — e.g. "jrx-code/ha-security-sandbox"
+#   GITHUB_REPO        — e.g. "jrx-code/hassio-security-sandbox"
 #   GITLAB_PROJECT_ID  — numeric GitLab project ID
 #
 # Optional:

@@ -147,7 +147,7 @@ wiki-update:
 github-mirror:
   stage: mirror
   script:
-    - git remote set-url github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/ha-security-sandbox.git 2>/dev/null || git remote add github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/ha-security-sandbox.git
+    - git remote set-url github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/hassio-security-sandbox.git 2>/dev/null || git remote add github https://jrx-code:${GITHUB_TOKEN}@github.com/jrx-code/hassio-security-sandbox.git
     - git push github HEAD:main --force
     - git push github --tags --force 2>/dev/null || true
     - echo "GitHub mirror OK"
@@ -161,7 +161,7 @@ sync-github-issues:
     - apk add --no-cache curl jq 2>/dev/null || true
     - bash scripts/sync-github-issues.sh
   variables:
-    GITHUB_REPO: "jrx-code/ha-security-sandbox"
+    GITHUB_REPO: "jrx-code/hassio-security-sandbox"
     GITLAB_PROJECT_ID: "95"
   allow_failure: true
   rules:

@@ -93,7 +93,7 @@ def update_architecture(version: str, changelog: str):
         "markdown": md,
         "tags": [
             {"name": "typ", "value": "architecture"},
-            {"name": "project", "value": "ha-security-sandbox"},
+            {"name": "project", "value": "hassio-security-sandbox"},
             {"name": "version", "value": version},
         ]
     })

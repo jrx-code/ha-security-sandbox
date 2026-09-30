@@ -121,7 +121,7 @@ Off by default: every install or update would spend AI quota on a scan.
 
 1. Add this repository to your HA Add-on Store:
    ```
-   https://github.com/jrx-code/ha-security-sandbox
+   https://github.com/jrx-code/hassio-security-sandbox
    ```
 2. Install "HA Security Sandbox" from the store
 3. Configure your AI provider in the add-on settings
