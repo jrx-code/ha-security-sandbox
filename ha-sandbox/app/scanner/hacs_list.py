@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 async def fetch_installed_hacs(ha_url: str | None = None, ha_token: str | None = None) -> list[dict]:
     """Fetch installed HACS components from Home Assistant via WebSocket.
 
-    Returns list of dicts with keys: repository, category, installed_version, name.
+    Returns list of dicts with keys: repository, full_name, category, installed_version, name.
     """
     url = ha_url or settings.ha_url
     token = ha_token or settings.ha_token
@@ -57,6 +57,7 @@ async def fetch_installed_hacs(ha_url: str | None = None, ha_token: str | None =
             installed = [
                 {
                     "repository": r.get("full_name", ""),
+                    "full_name": r.get("full_name", ""),
                     "category": r.get("category", ""),
                     "installed_version": r.get("installed_version", ""),
                     "name": r.get("name", r.get("full_name", "")),

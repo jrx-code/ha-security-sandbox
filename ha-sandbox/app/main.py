@@ -17,6 +17,7 @@ from app import storage
 from app.ai.ollama import list_ollama_models, test_ollama, test_public_api
 from app.report.generator import export_csv, export_html, export_pdf, export_sarif, load_all_reports, load_report
 from app.report.mqtt import disconnect, publish_discovery, publish_status
+from app import hacs_autoscan_api, hacs_watcher
 from app.scanner.hacs_list import fetch_installed_hacs, repo_to_url, test_ha_connection
 from app.scanner.pipeline import run_scan
 from app import scheduler
@@ -56,13 +57,17 @@ async def lifespan(app: FastAPI):
         scheduler.start(cfg.get("schedule_interval_hours", 24))
     if cfg.get("cve_watch_enabled"):
         scheduler.start_cve_watch(cfg.get("cve_watch_interval_hours", 6))
+    if cfg.get("hacs_autoscan_enabled"):
+        hacs_watcher.start()
     yield
+    hacs_watcher.stop()
     scheduler.stop()
     storage.close()
     disconnect()
 
 
 app = FastAPI(title="HA Sandbox Analyzer", version=__version__, lifespan=lifespan)
+hacs_autoscan_api.register_routes(app)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "templates"))
 
 # Rate limiting: max 3 concurrent scans

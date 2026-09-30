@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.22.0] - 2026-09-30
+
+### Added
+- **HACS auto-scan on install/update** (opt-in, `hacs_autoscan_enabled`, default off)
+  - Subscribes to HACS's `hacs_dispatch_repository` signal via `hacs/subscribe`; HACS
+    does not use the HA event bus for this
+  - Snapshot diff of installed repositories (every 2 min, and 5 s after an install signal)
+    decides what changed and to which version
+  - Scans run through the shared queue (concurrency limit, job records); alerts come from
+    the notification alerts added in 0.21.1
+  - `GET/POST /api/hacs-autoscan`, add-on option + `SANDBOX_HACS_AUTOSCAN_ENABLED` seed
+- `fetch_installed_hacs` also returns `full_name`
+
 ## [0.21.1] - 2026-09-18
 
 ### Added
@@ -13,7 +26,6 @@
 - Addon option `alerts_enabled` + `SANDBOX_ALERTS_ENABLED` env seed on first start
 - Offline unit tests in `tests/test_alerts.py`
 
-### Notes
-- Version **0.21.1** (not 0.21.0) to avoid colliding with open PR #9 (`feat/hacs-autoscan-on-install`). Rebase/version bump may be needed after #9 merges.
-- Independently mergeable from `main` (does not stack on #9).
-- **Do not merge without user OK.** Refs #3.
+### Fixed (before release)
+- HA notifications use the supervisor token in the add-on (settings.json has none there)
+- `alert_active` is momentary: not retained, cleared by `off_delay` after the cooldown

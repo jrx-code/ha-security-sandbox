@@ -1,14 +1,15 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.21.1-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.22.0-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-305%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
 
-## What's New (v0.14–0.21)
+## What's New (v0.14–0.22)
 
+- **v0.22** — HACS auto-scan on install/update (opt-in)
 - **v0.21.1** — Notification alerts on critical/high findings (HA + MQTT + optional mobile push)
 - **v0.20** — English GUI, settings preserved on upgrade, OpenRouter 401 fix
 - **v0.19** — CVE watch: periodic vulnerability monitoring for installed deps
@@ -96,6 +97,18 @@ When a scan finds issues at or above a configurable severity threshold (default:
 - **Rate limiting** (`alert_cooldown_seconds`, default 1 hour) to avoid alert fatigue
 - Toggle with `alerts_enabled` / addon option / `GET|POST /api/alerts`
 
+### HACS Auto-scan
+
+Off by default: every install or update would spend AI quota on a scan.
+
+- Subscribes to HACS's own `hacs_dispatch_repository` signal over the HA WebSocket
+  (`hacs/subscribe`); an install brings the next snapshot of installed repositories forward
+- A snapshot every 2 minutes is the fallback, and the diff decides what was installed or
+  updated and to which version
+- Scans go through the same queue as the UI (max 3 at once) with a 10-minute cooldown per
+  repository and version; findings are alerted by the Notification Alerts above
+- Toggle with the `hacs_autoscan_enabled` add-on option, settings, or `POST /api/hacs-autoscan`
+
 ### Reporting
 
 - **Web dashboard** with Nord theme, severity sorting, and AI summary
@@ -135,6 +148,7 @@ Open `http://localhost:8099` in your browser.
 | `public_api_key` | — | API key for public provider |
 | `mqtt_enabled` | `true` | Publish results to MQTT |
 | `mqtt_tls` | `true` | Use TLS for MQTT connection |
+| `hacs_autoscan_enabled` | `false` | Scan HACS components when they are installed or updated |
 | `log_level` | `info` | Logging verbosity |
 
 ## Architecture
@@ -195,6 +209,8 @@ Clone repo → Parse manifest
 | `GET` | `/api/whitelist` | List all whitelisted patterns |
 | `GET` | `/api/reputation/{domain}` | Get component reputation (trend, history) |
 | `GET` | `/api/reputation` | Get all component reputations |
+| `GET` | `/api/hacs-autoscan` | HACS auto-scan watcher status |
+| `POST` | `/api/hacs-autoscan` | Enable or disable HACS auto-scan (`{"enabled": true}`) |
 
 ## Code Learning
 
@@ -215,7 +231,7 @@ pip install -r ha-sandbox/requirements.txt
 cd ha-sandbox && python -m pytest tests/ -q
 ```
 
-**265 tests** across 14 suites covering all pipeline phases:
+**305 tests** across 17 test files covering all pipeline phases:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
@@ -235,6 +251,8 @@ cd ha-sandbox && python -m pytest tests/ -q
 | CVE Lookup | 9 | OSV.dev queries, version matching |
 | Dependency Scanner | 21 | npm, pip, pyproject.toml, malicious packages, batch CVE |
 | Storage | 8 | SQLite CRUD, migrations |
+| Alerts | 23 | Threshold, cooldown, HA/MQTT dispatch, supervisor token |
+| HACS Auto-scan | 17 | Signal parsing, subscription, snapshot diff, cooldown, lifecycle |
 
 ## Security Scoring
 
@@ -250,7 +268,6 @@ cd ha-sandbox && python -m pytest tests/ -q
 
 | Priority | Feature | Description |
 |----------|---------|-------------|
-| **High** | HACS webhook / auto-scan | Auto-scan components on HACS install/update events |
 | **Medium** | HA Dashboard Lovelace card | Custom card showing security summary for installed components |
 | **Medium** | Comparative reports | Track score changes between versions, detect regressions |
 | **Low** | Multi-instance support | Scan components on remote HA instances |
