@@ -281,6 +281,11 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
             publish_scan_result(job)
         except Exception as e:
             log.warning("[%s] MQTT publish failed (non-fatal): %s", job.id, e)
+        try:
+            from app.alerts import maybe_alert
+            await maybe_alert(job)
+        except Exception as e:
+            log.warning("[%s] Alert dispatch failed (non-fatal): %s", job.id, e)
         log.info("[%s] Done: %d findings, score=%s", job.id, len(job.findings), job.ai_score)
 
     except Exception as e:

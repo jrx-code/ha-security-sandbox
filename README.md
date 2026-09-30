@@ -1,14 +1,15 @@
 # HA Security Sandbox
 
-[![Version](https://img.shields.io/badge/version-0.20.3-blue.svg)](ha-sandbox/config.yaml)
+[![Version](https://img.shields.io/badge/version-0.21.1-blue.svg)](ha-sandbox/config.yaml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-265%20passed-brightgreen.svg)](#testing)
 [![HA Add-on](https://img.shields.io/badge/Home%20Assistant-Add--on-41BDF5.svg)](https://www.home-assistant.io/addons/)
 
 Security scanner for **Home Assistant custom components**. Analyzes HACS integrations and Lovelace cards for potential vulnerabilities using multi-layer static analysis and AI-powered code review.
 
-## What's New (v0.14–0.20)
+## What's New (v0.14–0.21)
 
+- **v0.21.1** — Notification alerts on critical/high findings (HA + MQTT + optional mobile push)
 - **v0.20** — English GUI, settings preserved on upgrade, OpenRouter 401 fix
 - **v0.19** — CVE watch: periodic vulnerability monitoring for installed deps
 - **v0.18** — SARIF export for CI/CD integration (GitHub Code Scanning, GitLab SAST)
@@ -84,10 +85,21 @@ Scan all installed HACS components at once with progress tracking and SQLite-bac
 
 Export scan results in [SARIF](https://sarifweb.azurewebsites.net/) format for CI/CD integration — compatible with GitHub Code Scanning, GitLab SAST, and other tools.
 
+
+### Notification Alerts
+
+When a scan finds issues at or above a configurable severity threshold (default: **critical**):
+
+- **HA persistent notifications** via REST
+- **MQTT alerts** on `{node_id}/alert` with optional discovery sensors
+- **Optional mobile push** through any HA notify service (`alert_notify_service`)
+- **Rate limiting** (`alert_cooldown_seconds`, default 1 hour) to avoid alert fatigue
+- Toggle with `alerts_enabled` / addon option / `GET|POST /api/alerts`
+
 ### Reporting
 
 - **Web dashboard** with Nord theme, severity sorting, and AI summary
-- **MQTT auto-discovery** — 4 HA sensors (status, last scan, score, total scans)
+- **MQTT auto-discovery** — sensors (status, last scan, score, total scans, last alert) + alert binary_sensor
 - **Export** — JSON, CSV, HTML, PDF, and SARIF
 
 ## Installation
@@ -240,7 +252,6 @@ cd ha-sandbox && python -m pytest tests/ -q
 |----------|---------|-------------|
 | **High** | HACS webhook / auto-scan | Auto-scan components on HACS install/update events |
 | **Medium** | HA Dashboard Lovelace card | Custom card showing security summary for installed components |
-| **Medium** | Notification alerts | Alert on critical findings via HA notifications, MQTT |
 | **Medium** | Comparative reports | Track score changes between versions, detect regressions |
 | **Low** | Multi-instance support | Scan components on remote HA instances |
 | **Low** | Community safety database | Crowd-sourced component safety ratings |

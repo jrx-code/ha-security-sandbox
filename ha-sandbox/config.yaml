@@ -1,5 +1,5 @@
 name: "HA Security Sandbox"
-version: "0.20.3"
+version: "0.21.1"
 slug: ha_security_sandbox
 description: "Security scanner for Home Assistant custom components — static analysis + AI review"
 url: "https://github.com/jrx-code/ha-security-sandbox"
@@ -43,6 +43,7 @@ options:
   public_url: "https://openrouter.ai/api/v1"
   mqtt_enabled: true
   mqtt_tls: true
+  alerts_enabled: true
   log_level: info
 
 schema:
@@ -55,4 +56,5 @@ schema:
   public_url: "url?"
   mqtt_enabled: "bool"
   mqtt_tls: "bool"
+  alerts_enabled: "bool"
   log_level: "list(debug|info|warning|error)"
