@@ -82,10 +82,22 @@ def publish_discovery():
         "device_class": "problem",
         "device": device,
         "icon": "mdi:shield-alert",
+        # ON is a momentary event, not a stored state: HA drops it back to OFF
+        # once the alert cooldown has passed without a new alert.
+        "off_delay": _alert_off_delay(),
     }
     client.publish(f"{bin_base}/alert/config", json.dumps(alert_cfg), retain=True)
 
     log.info("MQTT discovery published for %d sensors + alert binary_sensor", len(sensors))
+
+
+def _alert_off_delay() -> int:
+    from app import settings as app_settings
+
+    try:
+        return max(60, int(app_settings.get("alert_cooldown_seconds", 3600)))
+    except (TypeError, ValueError):
+        return 3600
 
 
 def publish_scan_result(job: ScanJob):
@@ -137,7 +149,7 @@ def publish_finding_alert(job: ScanJob, findings: list, *, title: str = "", mess
         }
         client.publish(f"{node}/alert", json.dumps(payload), retain=False)
         client.publish(f"{node}/last_alert", title or name, retain=True)
-        client.publish(f"{node}/alert_active", "ON", retain=True)
+        client.publish(f"{node}/alert_active", "ON", retain=False)
         client.publish(f"{node}/status", f"alert:{name}", retain=True)
         log.warning("MQTT finding alert published for %s (%d findings)", name, len(findings))
     except Exception as e:

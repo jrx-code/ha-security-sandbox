@@ -312,3 +312,44 @@ class TestHttpxCalls:
         assert result is not None
         assert result.get("persistent_notification") is False
         assert result.get("count") == 1
+
+
+class TestHaEndpoint:
+    def test_saved_token_wins_with_its_url(self):
+        from app.alerts import _ha_endpoint
+
+        ep = _ha_endpoint({"ha_url": "http://ha.local:8123", "ha_token": "saved"})
+        assert ep == {"ha_url": "http://ha.local:8123", "ha_token": "saved"}
+
+    def test_addon_falls_back_to_runtime_supervisor_pair(self):
+        """In the add-on settings.json has no token; the supervisor pair lives in
+        the runtime config (SANDBOX_HA_URL / SANDBOX_HA_TOKEN from run.sh)."""
+        from app.alerts import _ha_endpoint
+        from app.config import settings as runtime
+
+        with patch.object(runtime, "ha_url", "http://supervisor/core"), patch.object(
+            runtime, "ha_token", "supervisor-token"
+        ):
+            ep = _ha_endpoint({"ha_url": "http://homeassistant:8123", "ha_token": ""})
+        assert ep == {"ha_url": "http://supervisor/core", "ha_token": "supervisor-token"}
+
+
+class TestAlertActiveIsNotRetained:
+    def test_on_is_published_without_retain(self):
+        from app.report import mqtt
+
+        client = MagicMock()
+        client.is_connected.return_value = True
+        job = MagicMock()
+        job.name = "x"
+        finding = MagicMock()
+        finding.severity.value = "critical"
+        finding.category = "network"
+        finding.file = "a.py"
+        finding.description = "d"
+        with patch("app.report.mqtt._get_client", return_value=client):
+            mqtt.publish_finding_alert(job, [finding], title="t", message="m")
+        on = [c for c in client.publish.call_args_list if c[0][0].endswith("/alert_active")]
+        assert len(on) == 1
+        assert on[0][0][1] == "ON"
+        assert on[0][1].get("retain") is False

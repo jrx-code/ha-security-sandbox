@@ -182,11 +182,17 @@ class TestMQTTDiscovery:
              patch("app.report.mqtt._get_client", return_value=mock_client):
             publish_discovery()
 
-        # Should publish 4 sensor configs (status, last_scan, last_score, scans_total)
-        assert mock_client.publish.call_count == 4
+        # 5 sensors (status, last_scan, last_score, scans_total, last_alert)
+        # plus the alert binary_sensor
+        assert mock_client.publish.call_count == 6
         calls = mock_client.publish.call_args_list
         topics = [c[0][0] for c in calls]
-        assert all("homeassistant/sensor/ha_sandbox/" in t for t in topics)
+        assert sum("homeassistant/sensor/ha_sandbox/" in t for t in topics) == 5
+        assert "homeassistant/binary_sensor/ha_sandbox/alert/config" in topics
+
+        # The alert is momentary: HA turns it off again after the cooldown
+        alert = json.loads(next(c[0][1] for c in calls if c[0][0].endswith("/alert/config")))
+        assert alert["off_delay"] >= 60
 
         # Verify retain flag
         for call in calls:

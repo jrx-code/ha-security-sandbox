@@ -59,7 +59,7 @@ def _aggregate_info_findings(findings: list[Finding], max_network: int = 5) -> l
     network_findings = [f for f in findings if f.category == "network"]
     other_findings = [f for f in findings if f.category != "network"]
 
-    if not (len(network_findings) > max_network):
+    if len(network_findings) <= max_network:
         return findings
 
     # Keep first max_network, aggregate the rest into a summary

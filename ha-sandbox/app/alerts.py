@@ -179,6 +179,22 @@ async def call_notify_service(
             await client.aclose()
 
 
+def _ha_endpoint(cfg: dict[str, Any]) -> dict[str, str]:
+    """URL and token for the HA REST API, as one pair.
+
+    A token saved in settings.json (web UI, standalone Docker) wins together with
+    its URL. Otherwise use the runtime config, which is where the add-on puts
+    SUPERVISOR_TOKEN and http://supervisor/core (run.sh exports SANDBOX_HA_*;
+    settings.json is only seeded from HA_TOKEN, which the add-on never sets).
+    """
+    token = str(cfg.get("ha_token", "") or "")
+    if token:
+        return {"ha_url": str(cfg.get("ha_url", "") or ""), "ha_token": token}
+    from app.config import settings as runtime
+
+    return {"ha_url": runtime.ha_url or "", "ha_token": runtime.ha_token or ""}
+
+
 def _alert_config() -> dict[str, Any]:
     cfg = app_settings.load()
     threshold = str(cfg.get("alert_severity_threshold", "critical")).lower()
@@ -193,8 +209,7 @@ def _alert_config() -> dict[str, Any]:
         "threshold": threshold,
         "cooldown_seconds": max(0, cooldown),
         "notify_service": str(cfg.get("alert_notify_service", "") or "").strip(),
-        "ha_url": str(cfg.get("ha_url", "") or ""),
-        "ha_token": str(cfg.get("ha_token", "") or ""),
+        **_ha_endpoint(cfg),
         "mqtt_enabled": bool(cfg.get("mqtt_enabled", True)),
     }
 
