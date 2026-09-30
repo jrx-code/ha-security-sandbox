@@ -34,6 +34,8 @@ DEFAULTS = {
     "schedule_interval_hours": 24,
     "cve_watch_enabled": False,
     "cve_watch_interval_hours": 6,
+    # Off by default: every HACS install/update would spend AI quota on a scan.
+    "hacs_autoscan_enabled": False,
     # Notification alerts (#3)
     "alerts_enabled": True,
     "alert_severity_threshold": "critical",  # critical | high | medium
@@ -155,6 +157,10 @@ def init_from_env() -> None:
     env_alerts = os.environ.get("SANDBOX_ALERTS_ENABLED", "")
     if env_alerts and "alerts_enabled" not in raw:
         data["alerts_enabled"] = env_alerts.lower() in ("1", "true", "yes", "on")
+
+    env_autoscan = os.environ.get("SANDBOX_HACS_AUTOSCAN_ENABLED", "")
+    if env_autoscan and "hacs_autoscan_enabled" not in raw:
+        data["hacs_autoscan_enabled"] = env_autoscan.lower() in ("1", "true", "yes", "on")
 
     save(data)
 
