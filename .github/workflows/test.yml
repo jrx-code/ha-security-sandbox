@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"  # same as the add-on base image
+          cache: pip
+          cache-dependency-path: ha-sandbox/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ha-sandbox/requirements.txt pytest pytest-asyncio "ruff==0.15.0"
+
+      # Ruff is pinned: newer releases widened the default rule set.
+      - name: Ruff
+        run: ruff check ha-sandbox/app
+
+      # Run from the repo root: pytest.ini sets pythonpath = ha-sandbox and testpaths = tests.
+      - name: Pytest
+        run: python -m pytest -q

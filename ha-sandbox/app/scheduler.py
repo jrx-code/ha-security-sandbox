@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from datetime import datetime
 
 log = logging.getLogger(__name__)
 

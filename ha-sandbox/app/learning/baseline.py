@@ -8,7 +8,6 @@ Components that deviate significantly from the norm get flagged so the user
 knows something unusual is going on (not necessarily bad, but worth attention).
 """
 
-import json
 import logging
 import math
 import sqlite3

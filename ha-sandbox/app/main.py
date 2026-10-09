@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app import settings as app_settings
@@ -93,7 +93,7 @@ async def _run_scan_background(repo_url: str, name: str, batch_id: str = ""):
     storage.create_job(job_id, name, repo_url, batch_id=batch_id)
     async with _scan_semaphore:
         try:
-            job = await run_scan(repo_url, name)
+            await run_scan(repo_url, name)
             storage.complete_job(job_id)
             if batch_id:
                 storage.batch_job_done(batch_id, success=True)

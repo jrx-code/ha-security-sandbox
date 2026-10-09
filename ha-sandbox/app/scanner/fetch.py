@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
 
@@ -38,7 +37,6 @@ def detect_type(repo_path: Path) -> ComponentType:
     if hacs_json.exists():
         try:
             data = json.loads(hacs_json.read_text())
-            render = data.get("render_readme", False)
             cat = data.get("category", "")
             if cat == "plugin" or cat == "lovelace":
                 return ComponentType.CARD
