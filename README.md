@@ -227,8 +227,8 @@ The scanner learns from accumulated scan data to provide better results over tim
 ## Testing
 
 ```bash
-pip install -r ha-sandbox/requirements.txt
-cd ha-sandbox && python -m pytest tests/ -q
+pip install -r ha-sandbox/requirements.txt pytest pytest-asyncio
+python -m pytest -q   # from the repo root (pytest.ini sets pythonpath = ha-sandbox)
 ```
 
 **305 tests** across 17 test files covering all pipeline phases:

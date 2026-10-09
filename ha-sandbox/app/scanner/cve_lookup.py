@@ -391,7 +391,5 @@ def _map_severity(vuln: dict) -> Severity:
             except (ValueError, IndexError):
                 pass
 
-    # Fallback: check aliases for CVE severity hints
-    aliases = vuln.get("aliases", [])
     # Default to HIGH for any known vulnerability
     return Severity.HIGH

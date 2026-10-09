@@ -98,7 +98,6 @@ def get(key: str, default: Any = None) -> Any:
 def _apply_to_runtime(data: dict) -> None:
     """Push settings into the runtime config singleton."""
     from app.config import settings as cfg
-    import os
 
     if data.get("ai_provider") == "ollama":
         cfg.ollama_url = data.get("ollama_url", cfg.ollama_url)

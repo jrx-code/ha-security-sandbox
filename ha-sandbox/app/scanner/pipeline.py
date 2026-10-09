@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import uuid
-from pathlib import Path
 
 from app import storage
 from app.models import ComponentType, Finding, ScanJob, ScanStatus, Severity
@@ -276,7 +275,7 @@ async def run_scan(repo_url: str, name: str = "") -> ScanJob:
 
         # Phase 5: Report
         job.status = ScanStatus.DONE
-        report_path = generate_report(job, learning_data=learning_data or None)
+        generate_report(job, learning_data=learning_data or None)
         try:
             publish_scan_result(job)
         except Exception as e:
